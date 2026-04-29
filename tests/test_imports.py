@@ -21,9 +21,11 @@ PUBLIC_MODULES = [
     "agora.config",
     "agora.client",
     "agora.errors",
+    "agora.loaders",                      # subpackage facade
     "agora.loaders.rest",
     "agora.loaders.parquet",
     "agora.loaders.socket",
+    "agora.adapters",                     # subpackage facade
     "agora.adapters.market",
     "agora.normalize",
     "agora.normalize.base",
@@ -47,6 +49,54 @@ def test_version_exposed() -> None:
 
     assert isinstance(agora.__version__, str)
     assert agora.__version__.count(".") == 2  # x.y.z
+
+
+def test_top_level_public_surface() -> None:
+    """The package facade — these names MUST be importable as `from agora import X`.
+
+    This is the public contract. Adding new names is fine; removing or
+    renaming any of these without a migration period would break callers.
+    """
+    import agora
+
+    expected = {
+        # Client / Config
+        "MassiveClient", "MassiveConfig", "get_client", "reset_client",
+        # Loaders
+        "FlatFileLoader", "MassiveDataApi", "WebSocketStreamer",
+        # Adapters
+        "get_prices", "get_returns",
+        # Bulk download
+        "download_stocks", "download_forex",
+        "download_reference", "download_ticker_events",
+        # Errors
+        "MassiveAPIError", "MassiveAuthenticationError",
+        "MassiveDataNotFoundError", "MassiveRateLimitError",
+    }
+    missing = expected - set(dir(agora))
+    assert not missing, f"top-level public names missing: {sorted(missing)}"
+
+
+def test_top_level_all_matches_actual_exports() -> None:
+    """`__all__` should be a subset of what's actually accessible."""
+    import agora
+
+    declared = set(agora.__all__)
+    accessible = set(dir(agora))
+    leaked = declared - accessible
+    assert not leaked, f"declared in __all__ but missing: {sorted(leaked)}"
+
+
+def test_subpackage_facades() -> None:
+    """`agora.loaders` and `agora.adapters` should also re-export their classes."""
+    from agora.loaders import FlatFileLoader, MassiveDataApi, WebSocketStreamer
+    from agora.adapters import get_prices, get_returns
+
+    assert FlatFileLoader.__name__ == "FlatFileLoader"
+    assert MassiveDataApi.__name__ == "MassiveDataApi"
+    assert WebSocketStreamer.__name__ == "WebSocketStreamer"
+    assert callable(get_prices)
+    assert callable(get_returns)
 
 
 def test_download_public_exports() -> None:
