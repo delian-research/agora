@@ -1,5 +1,7 @@
 # agora
 
+[![test](https://github.com/delian-research/agora/actions/workflows/test.yml/badge.svg)](https://github.com/delian-research/agora/actions/workflows/test.yml)
+
 Market-data ingestion and local Parquet store for [Massive.com](https://massive.com)
 (formerly Polygon.io). Bulk historical via S3 flat files, live REST + WebSocket
 access, security master with FIGI-linked ticker history.
