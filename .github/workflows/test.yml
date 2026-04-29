@@ -37,6 +37,11 @@ jobs:
       # to satisfy validation. Don't expose your real key here.
       MASSIVE_API_KEY: dummy_ci_key_not_a_real_secret
 
+      # Opt into Node.js 24 early. GitHub deprecates Node 20 in June 2026
+      # and removes it Sept 2026; this silences the deprecation warning
+      # without waiting for actions/* to publish v5 / v7 releases.
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
