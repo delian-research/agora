@@ -1,0 +1,61 @@
+# Continuous integration: run the pytest smoke suite on every push and PR.
+#
+# What this catches:
+#   - Import-graph regressions (the audit's BUG-1, 2, 4-7, 10 surface)
+#   - WebSocket structural regressions (channel routing, dispatch)
+#   - Anything covered by the 38 tests in tests/
+#
+# What this does NOT do:
+#   - Run live-data tests (test_loaders.py auto-skips when data/ is absent,
+#     which is always true on the runner since data/ is gitignored).
+#   - Use your real MASSIVE_API_KEY — a dummy value is provided just so
+#     MassiveConfig.from_env() validation passes.
+
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:        # lets you trigger a run manually from the Actions tab
+
+# Cancel an in-progress run if a new commit lands on the same branch
+# (saves CI minutes when you're force-pushing fixups during a PR).
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    env:
+      # MassiveConfig.from_env() raises if MASSIVE_API_KEY is unset.
+      # The test suite never makes live API calls — the value just has
+      # to satisfy validation. Don't expose your real key here.
+      MASSIVE_API_KEY: dummy_ci_key_not_a_real_secret
+
+      # Opt into Node.js 24 early. GitHub deprecates Node 20 in June 2026
+      # and removes it Sept 2026; this silences the deprecation warning
+      # without waiting for actions/* to publish v5 / v7 releases.
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - name: Install Python (pinned by .python-version)
+        run: uv python install
+
+      - name: Sync dependencies (incl. dev extras)
+        run: uv sync --extra dev
+
+      - name: Run pytest
+        run: uv run pytest -v
