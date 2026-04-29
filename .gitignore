@@ -1,0 +1,40 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info/
+
+# Test / type-check caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Notebooks
+.ipynb_checkpoints/
+
+# Virtual environments
+.venv/
+venv/
+
+# Secrets — DO NOT COMMIT
+.env
+.env.*
+!.env.example
+
+# Generated data (~327 MB of Parquet)
+data/
+
+# Claude Code local settings (may contain API keys in command history)
+.claude/settings.local.json
+.claude/projects/
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

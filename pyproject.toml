@@ -1,0 +1,54 @@
+[project]
+name = "agora"
+version = "0.1.0"
+description = "Market data ingestion and local Parquet store for Massive.com (formerly Polygon.io) data — bulk historical via S3 flat files, live REST + WebSocket access, security master with FIGI-linked ticker history."
+readme = "README.md"
+requires-python = ">=3.13"
+authors = [{ name = "aklingler" }]
+license = { text = "Proprietary" }
+keywords = ["market-data", "polygon", "massive", "parquet", "quant", "ohlcv"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Financial and Insurance Industry",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Office/Business :: Financial :: Investment",
+    "Typing :: Typed",
+]
+dependencies = [
+    "boto3>=1.42.97",
+    "holidays>=0.94",
+    "massive>=2.4.0",
+    "numpy>=2.4.4",
+    "pandas>=3.0.2",
+    "pandas-market-calendars>=5.3.2",
+    "pyarrow>=24.0.0",
+    "python-dotenv>=1.2.2",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-mock>=3.12",
+]
+
+[project.scripts]
+agora-download = "agora.download.cli:main"
+
+[build-system]
+requires = ["hatchling>=1.21"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["agora"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-q --strict-markers"
+filterwarnings = [
+    # The shim intentionally warns; tests assert it does, but other tests
+    # importing from the canonical path shouldn't see it.
+    "ignore::DeprecationWarning:agora.loaders.s3",
+]

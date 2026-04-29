@@ -1,0 +1,21 @@
+# Auto-detect text files and normalize line endings on commit
+* text=auto eol=lf
+
+# Source code: explicitly LF
+*.py     text eol=lf
+*.toml   text eol=lf
+*.md     text eol=lf
+*.yml    text eol=lf
+*.yaml   text eol=lf
+*.json   text eol=lf
+*.lock   text eol=lf
+*.sh     text eol=lf
+*.cfg    text eol=lf
+*.ini    text eol=lf
+
+# Binary / generated — never normalize
+*.parquet binary
+*.csv.gz  binary
+*.png     binary
+*.jpg     binary
+*.ico     binary
