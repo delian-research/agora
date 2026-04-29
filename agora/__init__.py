@@ -65,6 +65,9 @@ from agora.loaders import (
     WebSocketStreamer,
 )
 
+# ── Asset-class facades ─────────────────────────────────────────────
+from agora import equities
+
 # ── Analytics adapters ──────────────────────────────────────────────
 from agora.adapters import get_prices, get_returns
 
@@ -87,6 +90,8 @@ __all__ = [
     "FlatFileLoader",
     "MassiveDataApi",
     "WebSocketStreamer",
+    # Asset-class facades
+    "equities",
     # Adapters
     "get_prices",
     "get_returns",
