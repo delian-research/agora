@@ -26,10 +26,19 @@ from agora.equities import market
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = REPO_ROOT / "data"
 STOCK_DIR = DATA_DIR / "stocks" / "daily"
+REF_DIR = DATA_DIR / "reference"
 
 requires_stocks = pytest.mark.skipif(
     not STOCK_DIR.exists() or not list(STOCK_DIR.glob("*.parquet")),
     reason="data/stocks/daily/*.parquet not present (run `agora-download stocks` first)",
+)
+requires_dividends = pytest.mark.skipif(
+    not (REF_DIR / "dividends.parquet").exists(),
+    reason="data/reference/dividends.parquet not present (run `agora-download reference` first)",
+)
+requires_splits = pytest.mark.skipif(
+    not (REF_DIR / "splits.parquet").exists(),
+    reason="data/reference/splits.parquet not present (run `agora-download reference` first)",
 )
 
 
@@ -377,8 +386,98 @@ class TestStubsRaiseNotImplemented:
         with pytest.raises(NotImplementedError, match="Benzinga"):
             equities.get_earnings(["AAPL"])
 
-    def test_cax_stubs(self) -> None:
-        with pytest.raises(NotImplementedError):
-            equities.cax.get_dividends("AAPL")
-        with pytest.raises(NotImplementedError):
-            equities.cax.get_splits("AAPL")
+
+# ── Corporate actions: dividends ────────────────────────────────────
+
+class TestGetDividends:
+    @requires_dividends
+    def test_single_ticker(self) -> None:
+        df = equities.cax.get_dividends("AAPL")
+        assert not df.empty
+        assert (df["ticker"] == "AAPL").all()
+        # Schema columns we expect
+        for col in (
+            "ticker", "ex_dividend_date", "pay_date", "record_date",
+            "declaration_date", "cash_amount", "currency",
+            "frequency", "dividend_type",
+        ):
+            assert col in df.columns
+        # Sorted by ex_dividend_date
+        ex = df["ex_dividend_date"].dropna()
+        assert (ex.diff().dropna() >= pd.Timedelta(0)).all()
+
+    @requires_dividends
+    def test_basket(self) -> None:
+        df = equities.cax.get_dividends(["AAPL", "MSFT"])
+        assert set(df["ticker"].unique()) <= {"AAPL", "MSFT"}
+        assert not df.empty
+
+    @requires_dividends
+    def test_date_range_filters_on_ex_dividend(self) -> None:
+        df = equities.cax.get_dividends(
+            "AAPL", start="2024-01-01", end="2024-12-31"
+        )
+        if df.empty:
+            pytest.skip("No AAPL dividends in 2024 in this dataset")
+        assert df["ex_dividend_date"].min() >= pd.Timestamp("2024-01-01")
+        assert df["ex_dividend_date"].max() <= pd.Timestamp("2024-12-31")
+
+    @requires_dividends
+    def test_no_filters_returns_everything(self) -> None:
+        # Just make sure it doesn't blow up; the dataset has ~2M rows.
+        df = equities.cax.get_dividends()
+        assert not df.empty
+        assert len(df) > 1000
+
+    @requires_dividends
+    def test_unknown_ticker_returns_empty(self) -> None:
+        df = equities.cax.get_dividends("NOTAREALTICKER1234")
+        assert df.empty
+
+    @requires_dividends
+    def test_ticker_is_normalized_to_uppercase(self) -> None:
+        upper = equities.cax.get_dividends("AAPL")
+        lower = equities.cax.get_dividends("aapl")
+        pd.testing.assert_frame_equal(upper, lower)
+
+
+# ── Corporate actions: splits ───────────────────────────────────────
+
+class TestGetSplits:
+    @requires_splits
+    def test_single_ticker(self) -> None:
+        df = equities.cax.get_splits("AAPL")
+        assert not df.empty
+        assert (df["ticker"] == "AAPL").all()
+        for col in ("ticker", "execution_date", "split_from", "split_to"):
+            assert col in df.columns
+
+    @requires_splits
+    def test_basket(self) -> None:
+        df = equities.cax.get_splits(["AAPL", "TSLA", "NVDA"])
+        assert set(df["ticker"].unique()) <= {"AAPL", "TSLA", "NVDA"}
+
+    @requires_splits
+    def test_date_range_filters_on_execution_date(self) -> None:
+        df = equities.cax.get_splits(
+            start="2020-01-01", end="2020-12-31"
+        )
+        if not df.empty:
+            assert df["execution_date"].min() >= pd.Timestamp("2020-01-01")
+            assert df["execution_date"].max() <= pd.Timestamp("2020-12-31")
+
+    @requires_splits
+    def test_aapl_4_for_1_in_2020(self) -> None:
+        """Sanity check the dataset: AAPL had a 4:1 split on 2020-08-31."""
+        df = equities.cax.get_splits("AAPL", start="2020-01-01", end="2020-12-31")
+        assert not df.empty
+        row = df[df["execution_date"] == pd.Timestamp("2020-08-31")]
+        assert not row.empty
+        assert int(row.iloc[0]["split_from"]) == 1
+        assert int(row.iloc[0]["split_to"]) == 4
+
+    @requires_splits
+    def test_unknown_ticker_returns_empty(self) -> None:
+        df = equities.cax.get_splits("NOTAREALTICKER1234")
+        assert df.empty
+
