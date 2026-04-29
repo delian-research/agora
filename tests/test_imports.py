@@ -27,6 +27,16 @@ PUBLIC_MODULES = [
     "agora.loaders.socket",
     "agora.adapters",                     # subpackage facade
     "agora.adapters.market",
+    "agora.equities",                     # subpackage facade
+    "agora.equities.market",
+    "agora.equities.reference",
+    "agora.equities.cax",
+    "agora.equities.cax.dividends",
+    "agora.equities.cax.splits",
+    "agora.equities.company",
+    "agora.equities.company.classification",
+    "agora.equities.company.news",
+    "agora.equities.company.earnings",
     "agora.normalize",
     "agora.normalize.base",
     "agora.normalize.ohlc",
@@ -64,6 +74,8 @@ def test_top_level_public_surface() -> None:
         "MassiveClient", "MassiveConfig", "get_client", "reset_client",
         # Loaders
         "FlatFileLoader", "MassiveDataApi", "WebSocketStreamer",
+        # Asset-class facades
+        "equities",
         # Adapters
         "get_prices", "get_returns",
         # Bulk download
