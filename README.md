@@ -131,7 +131,7 @@ data/
 ### Read local Parquet (fast, no rate limits)
 
 ```python
-from agora.loaders.parquet import FlatFileLoader
+from agora import FlatFileLoader
 
 loader = FlatFileLoader()
 
@@ -149,7 +149,7 @@ meta_history = loader.get_continuous_prices("META", start="2021-06-01")
 ### Live REST API
 
 ```python
-from agora.client import MassiveClient
+from agora import MassiveClient
 
 with MassiveClient.from_env() as c:
     aggs = c.rest.get_aggregates(
@@ -161,7 +161,7 @@ with MassiveClient.from_env() as c:
 ### Live WebSocket streaming
 
 ```python
-from agora.loaders.socket import WebSocketStreamer
+from agora import WebSocketStreamer
 
 streamer = WebSocketStreamer(market="stocks")
 streamer.subscribe_trades("AAPL", "MSFT")
