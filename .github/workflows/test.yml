@@ -15,9 +15,9 @@ name: test
 
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
   pull_request:
-    branches: [main]
+    branches: [main, dev]
   workflow_dispatch:        # lets you trigger a run manually from the Actions tab
 
 # Cancel an in-progress run if a new commit lands on the same branch

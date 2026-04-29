@@ -66,6 +66,36 @@ uv sync --extra dev          # adds pytest + pytest-mock
 pytest                        # runs the smoke suite
 ```
 
+## Contributing workflow
+
+Branches:
+
+- **`dev`** — default branch; integration target for all feature work.
+- **`main`** — stable / released code; only updated by promoting `dev`.
+
+Feature flow (`local → dev`):
+
+```bash
+git switch dev
+git pull
+git switch -c feat/my-thing
+# ... edit, commit ...
+git push -u origin feat/my-thing
+gh pr create --fill        # base defaults to dev
+```
+
+CI (the 38-test pytest suite) runs on every PR and on every push to
+`dev` or `main`. Branch protection on `dev` requires the `test` check
+to pass before the merge button enables. Direct pushes to either
+protected branch are blocked.
+
+Release flow (`dev → main`):
+
+```bash
+gh pr create --base main --head dev --title "Release"
+# review, merge once dev is stable
+```
+
 ## Quickstart
 
 ### Bulk download

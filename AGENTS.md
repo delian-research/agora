@@ -42,11 +42,16 @@ Common workflows:
   - `python -m agora.download all --no-resume`
 
 ### Build, lint, and test status
-There are currently no repository-defined build/lint/test commands (no `Makefile`, no tool sections for pytest/ruff/mypy, and no test directory in the current tree).
+- Run the smoke suite: `pytest` (runs 38 tests in <1s)
+- Run a single test: `pytest tests/test_imports.py::test_module_imports`
+- CI: `.github/workflows/test.yml` runs the same `pytest` invocation on
+  every push and PR to `dev` or `main`.
 
-When adding tests, use standard pytest invocation:
-- Run all tests: `pytest`
-- Run a single test: `pytest path/to/test_file.py::test_name`
+### Branching
+- Default branch is `dev` — feature work lands here first via PR.
+- `main` is the stable / released branch; updated by promoting `dev`.
+- Both branches are protected: PR required, `test` CI must pass, no
+  force-push, no deletion.
 
 ## High-level architecture
 ### 1) Download pipeline (`agora/download`)
