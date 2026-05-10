@@ -34,6 +34,7 @@ def test_equities_public_surface() -> None:
         "get_daily_grouped", "get_snapshot",
         # reference
         "get_tickers", "get_ticker_details",
+        "get_ticker_types", "get_exchanges", "get_related_tickers",
         # company classification (now implemented)
         "get_industry", "get_sector",
         # company (still stubs — Benzinga)
@@ -955,3 +956,163 @@ class TestGetSector:
         from agora.equities.company.classification import _sic_to_sector
 
         assert _sic_to_sector(3571) == "Manufacturing"
+
+
+# ── Reference: get_exchanges (mocked REST) ──────────────────────────
+
+
+class FakeExchange:
+    def __init__(self, id, mic, name, **kwargs):
+        self.id = id
+        self.mic = mic
+        self.name = name
+        self.operating_mic = kwargs.get("operating_mic", mic)
+        self.type = kwargs.get("type", "exchange")
+        self.asset_class = kwargs.get("asset_class", "stocks")
+        self.locale = kwargs.get("locale", "us")
+        self.acronym = kwargs.get("acronym")
+        self.participant_id = kwargs.get("participant_id")
+        self.url = kwargs.get("url")
+
+
+class TestGetExchanges:
+    def test_basic_call(self) -> None:
+        fake = MagicMock()
+        fake.rest.get_exchanges.return_value = [
+            FakeExchange(1, "XNAS", "Nasdaq Stock Market"),
+            FakeExchange(2, "XNYS", "New York Stock Exchange"),
+        ]
+        df = equities.get_exchanges(client=fake)
+        fake.rest.get_exchanges.assert_called_once_with(
+            asset_class=None, locale=None,
+        )
+        assert len(df) == 2
+        assert set(df["mic"]) == {"XNAS", "XNYS"}
+        for col in (
+            "id", "mic", "operating_mic", "name", "type", "asset_class",
+            "locale", "acronym", "participant_id", "url",
+        ):
+            assert col in df.columns
+
+    def test_filters_pass_through(self) -> None:
+        fake = MagicMock()
+        fake.rest.get_exchanges.return_value = []
+        equities.get_exchanges(asset_class="stocks", locale="us", client=fake)
+        fake.rest.get_exchanges.assert_called_once_with(
+            asset_class="stocks", locale="us",
+        )
+
+    def test_empty_returns_schema_frame(self) -> None:
+        fake = MagicMock()
+        fake.rest.get_exchanges.return_value = []
+        df = equities.get_exchanges(client=fake)
+        assert df.empty
+        assert "mic" in df.columns
+
+
+# ── Reference: get_ticker_types (mocked REST) ───────────────────────
+
+
+class FakeTickerType:
+    def __init__(self, code, description, asset_class="stocks", locale="us"):
+        self.code = code
+        self.description = description
+        self.asset_class = asset_class
+        self.locale = locale
+
+
+class TestGetTickerTypes:
+    def test_basic_call(self) -> None:
+        fake = MagicMock()
+        fake.rest.get_ticker_types.return_value = [
+            FakeTickerType("CS", "Common Stock"),
+            FakeTickerType("ETF", "Exchange Traded Fund"),
+            FakeTickerType("ADRC", "American Depository Receipt Common"),
+        ]
+        df = equities.get_ticker_types(client=fake)
+        fake.rest.get_ticker_types.assert_called_once_with(
+            asset_class=None, locale=None,
+        )
+        assert len(df) == 3
+        assert set(df["code"]) == {"CS", "ETF", "ADRC"}
+        for col in ("code", "description", "asset_class", "locale"):
+            assert col in df.columns
+
+    def test_filters_pass_through(self) -> None:
+        fake = MagicMock()
+        fake.rest.get_ticker_types.return_value = []
+        equities.get_ticker_types(
+            asset_class="stocks", locale="us", client=fake,
+        )
+        fake.rest.get_ticker_types.assert_called_once_with(
+            asset_class="stocks", locale="us",
+        )
+
+    def test_empty_returns_schema_frame(self) -> None:
+        fake = MagicMock()
+        fake.rest.get_ticker_types.return_value = []
+        df = equities.get_ticker_types(client=fake)
+        assert df.empty
+        assert "code" in df.columns
+
+
+# ── Reference: get_related_tickers (mocked REST) ────────────────────
+
+
+class FakeRelated:
+    def __init__(self, ticker):
+        self.ticker = ticker
+
+
+class TestGetRelatedTickers:
+    def test_basic_call(self) -> None:
+        fake = MagicMock()
+        fake.rest.get_related_companies.return_value = [
+            FakeRelated("MSFT"),
+            FakeRelated("GOOGL"),
+            FakeRelated("AMZN"),
+        ]
+        df = equities.get_related_tickers("AAPL", client=fake)
+        fake.rest.get_related_companies.assert_called_once_with("AAPL")
+        assert len(df) == 3
+        assert set(df["ticker"]) == {"MSFT", "GOOGL", "AMZN"}
+        # Source ticker denormalized for easy basket merging
+        assert (df["source_ticker"] == "AAPL").all()
+
+    def test_ticker_normalized_to_uppercase(self) -> None:
+        fake = MagicMock()
+        fake.rest.get_related_companies.return_value = []
+        equities.get_related_tickers("aapl", client=fake)
+        fake.rest.get_related_companies.assert_called_once_with("AAPL")
+
+    def test_empty_basket_raises(self) -> None:
+        fake = MagicMock()
+        with pytest.raises(ValueError, match="non-empty"):
+            equities.get_related_tickers("", client=fake)
+        with pytest.raises(ValueError, match="non-empty"):
+            equities.get_related_tickers("   ", client=fake)
+
+    def test_non_string_raises(self) -> None:
+        fake = MagicMock()
+        with pytest.raises(ValueError, match="non-empty"):
+            equities.get_related_tickers(["AAPL"], client=fake)  # type: ignore[arg-type]
+
+    def test_no_results_returns_schema_frame(self) -> None:
+        fake = MagicMock()
+        fake.rest.get_related_companies.return_value = []
+        df = equities.get_related_tickers("AAPL", client=fake)
+        assert df.empty
+        for col in ("ticker", "source_ticker"):
+            assert col in df.columns
+
+    def test_drops_rows_with_missing_ticker(self) -> None:
+        # SDK may occasionally return malformed rows; be defensive.
+        fake = MagicMock()
+        fake.rest.get_related_companies.return_value = [
+            FakeRelated("MSFT"),
+            FakeRelated(""),  # malformed
+            FakeRelated(None),  # malformed
+            FakeRelated("GOOGL"),
+        ]
+        df = equities.get_related_tickers("AAPL", client=fake)
+        assert set(df["ticker"]) == {"MSFT", "GOOGL"}

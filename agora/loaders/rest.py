@@ -273,6 +273,102 @@ class MassiveDataApi:
         return list(self._client.get_snapshot_all("stocks"))
 
     @retry_with_backoff()
+    def get_exchanges(
+        self,
+        *,
+        asset_class: str | None = None,
+        locale: str | None = None,
+    ) -> list:
+        """
+        List the catalog of exchanges (venues) Polygon recognizes.
+
+        Wraps ``/v3/reference/exchanges``. Single API call returns ~50
+        exchange records.
+
+        Args:
+            asset_class: ``"stocks"`` / ``"options"`` / ``"crypto"`` / ``"fx"``.
+                ``None`` returns every asset class.
+            locale: ``"us"`` / ``"global"``. ``None`` returns every locale.
+
+        Returns:
+            List of exchange objects with attributes ``id``, ``mic``,
+            ``operating_mic``, ``name``, ``type``, ``asset_class``,
+            ``locale``, ``acronym``, ``participant_id``, ``url``.
+
+        Raises:
+            MassiveAPIError: If request fails after retries.
+        """
+        logger.debug(
+            "Fetching exchanges: asset_class=%s locale=%s", asset_class, locale,
+        )
+        kwargs: dict = {}
+        if asset_class is not None:
+            kwargs["asset_class"] = asset_class
+        if locale is not None:
+            kwargs["locale"] = locale
+        return list(self._client.get_exchanges(**kwargs))
+
+    @retry_with_backoff()
+    def get_ticker_types(
+        self,
+        *,
+        asset_class: str | None = None,
+        locale: str | None = None,
+    ) -> list:
+        """
+        List the catalog of ticker type codes (CS, ETF, ADRC, etc.).
+
+        Wraps ``/v3/reference/tickers/types``. Single API call returns the
+        small lookup table that maps each ``type`` code to a human-readable
+        description and asset class. Useful for joining against the
+        ``type`` field on :meth:`list_tickers` / :meth:`get_ticker_details`.
+
+        Args:
+            asset_class: Filter to one asset class.
+            locale: Filter to one locale.
+
+        Returns:
+            List of ticker-type objects with attributes ``code``,
+            ``description``, ``asset_class``, ``locale``.
+
+        Raises:
+            MassiveAPIError: If request fails after retries.
+        """
+        logger.debug(
+            "Fetching ticker types: asset_class=%s locale=%s",
+            asset_class, locale,
+        )
+        kwargs: dict = {}
+        if asset_class is not None:
+            kwargs["asset_class"] = asset_class
+        if locale is not None:
+            kwargs["locale"] = locale
+        return list(self._client.get_ticker_types(**kwargs))
+
+    @retry_with_backoff()
+    def get_related_companies(self, ticker: str) -> list:
+        """
+        Get tickers Polygon considers similar/related to ``ticker``.
+
+        Wraps ``/v1/related-companies/{ticker}``. Single per-ticker call;
+        the response is a small list of related ticker symbols (typically
+        ~10).
+
+        Args:
+            ticker: Stock ticker symbol.
+
+        Returns:
+            List of related-ticker objects with at least a ``ticker``
+            attribute.
+
+        Raises:
+            MassiveAPIError: If request fails after retries.
+            MassiveDataNotFoundError: If ticker not found.
+        """
+        logger.debug(f"Fetching related companies for {ticker}")
+        return list(self._client.get_related_companies(ticker))
+
+    @retry_with_backoff()
     def list_tickers(
         self,
         *,
