@@ -1,5 +1,7 @@
 """Download reference data (tickers, exchanges, events, splits, dividends) → Parquet."""
 
+from __future__ import annotations
+
 import logging
 import os
 import time
@@ -11,6 +13,8 @@ from massive.exceptions import BadResponse
 
 from .checkpoint import Checkpoint
 from .config import DATA_DIR, REST_RATE_LIMIT
+from .metrics import download_metrics
+from .result import DownloadResult
 
 logger = logging.getLogger(__name__)
 
@@ -98,7 +102,7 @@ def _download_ticker_events(
     skipped = 0
     errors = 0
 
-    for i, ticker in enumerate(target_tickers):
+    for ticker in target_tickers:
         ckpt_key = f"event:{ticker}"
         if resume and checkpoint.is_done(ckpt_key):
             skipped += 1
@@ -241,10 +245,21 @@ def _get_price_tickers() -> set[str]:
     return tickers
 
 
+def _write_and_count(df: pd.DataFrame, path: Path, m) -> None:
+    """Write a reference DataFrame and accumulate metrics on the scope."""
+    if df.empty:
+        return
+    df.to_parquet(path, index=False, engine="pyarrow")
+    m.rows_written += len(df)
+    m.files_written += 1
+    m.bytes_written += path.stat().st_size
+    m.completed += 1
+
+
 def download_reference(
     output_dir: Path | None = None,
     api_key: str | None = None,
-) -> Path:
+) -> DownloadResult:
     """Download reference data and save as Parquet files.
 
     Downloads:
@@ -258,7 +273,7 @@ def download_reference(
         api_key: Massive/Polygon API key. Uses env var if not provided.
 
     Returns:
-        Path to the output directory.
+        :class:`DownloadResult` with row/byte counts and timing.
     """
     output_dir = output_dir or DATA_DIR / "reference"
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -266,33 +281,29 @@ def download_reference(
     key = api_key or os.getenv("MASSIVE_API_KEY")
     client = RESTClient(api_key=key)
 
-    # Tickers
-    tickers_df = _download_tickers(client)
-    tickers_df.to_parquet(output_dir / "tickers.parquet", index=False, engine="pyarrow")
+    with download_metrics("download_reference", output_dir=output_dir) as m:
+        # 4 datasets: tickers, exchanges, splits, dividends
+        m.requested = 4
 
-    time.sleep(CALL_INTERVAL)
+        tickers_df = _download_tickers(client)
+        tickers_df.to_parquet(output_dir / "tickers.parquet", index=False, engine="pyarrow")
+        m.rows_written += len(tickers_df)
+        m.files_written += 1
+        m.bytes_written += (output_dir / "tickers.parquet").stat().st_size
+        m.completed += 1
 
-    # Exchanges
-    exchanges_df = _download_exchanges(client)
-    if not exchanges_df.empty:
-        exchanges_df.to_parquet(output_dir / "exchanges.parquet", index=False, engine="pyarrow")
+        time.sleep(CALL_INTERVAL)
+        _write_and_count(_download_exchanges(client), output_dir / "exchanges.parquet", m)
 
-    time.sleep(CALL_INTERVAL)
+        time.sleep(CALL_INTERVAL)
+        _write_and_count(_download_splits(client), output_dir / "splits.parquet", m)
 
-    # Splits
-    splits_df = _download_splits(client)
-    if not splits_df.empty:
-        splits_df.to_parquet(output_dir / "splits.parquet", index=False, engine="pyarrow")
+        time.sleep(CALL_INTERVAL)
+        _write_and_count(_download_dividends(client), output_dir / "dividends.parquet", m)
 
-    time.sleep(CALL_INTERVAL)
+        logger.info(f"Reference data saved to {output_dir}")
 
-    # Dividends
-    dividends_df = _download_dividends(client)
-    if not dividends_df.empty:
-        dividends_df.to_parquet(output_dir / "dividends.parquet", index=False, engine="pyarrow")
-
-    logger.info(f"Reference data saved to {output_dir}")
-    return output_dir
+    return m.result
 
 
 def download_ticker_events(
@@ -300,7 +311,7 @@ def download_ticker_events(
     api_key: str | None = None,
     ticker_types: tuple[str, ...] = ("CS", "ETF"),
     resume: bool = True,
-) -> Path:
+) -> DownloadResult:
     """Download ticker events for tickers in our price data → security master.
 
     Scoped to tickers that appear in the downloaded stock price data,
@@ -313,7 +324,7 @@ def download_ticker_events(
         resume: If True, skip tickers already downloaded.
 
     Returns:
-        Path to the output directory.
+        :class:`DownloadResult` with row/byte counts and timing.
     """
     output_dir = output_dir or DATA_DIR / "reference"
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -339,23 +350,35 @@ def download_ticker_events(
 
     checkpoint = Checkpoint(output_dir / ".events_checkpoint.json")
 
-    events_df = _download_ticker_events(
-        client, tickers_df, checkpoint,
-        ticker_types=ticker_types,
-        resume=resume,
-    )
+    with download_metrics(
+        "download_ticker_events",
+        output_dir=output_dir,
+        checkpoint_path=checkpoint._path,
+    ) as m:
+        m.requested = len(tickers_df)
 
-    if not events_df.empty:
-        parquet_path = output_dir / "ticker_events.parquet"
-        # Merge with any existing data if resuming
-        if resume and parquet_path.exists():
-            existing = pd.read_parquet(parquet_path)
-            events_df = pd.concat([existing, events_df], ignore_index=True)
-            events_df = events_df.drop_duplicates(
-                subset=["ticker", "composite_figi", "valid_from"], keep="last"
-            )
-        events_df = events_df.sort_values(["composite_figi", "valid_from"]).reset_index(drop=True)
-        events_df.to_parquet(parquet_path, index=False, engine="pyarrow")
-        logger.info(f"Wrote {parquet_path.name} ({len(events_df)} rows)")
+        events_df = _download_ticker_events(
+            client, tickers_df, checkpoint,
+            ticker_types=ticker_types,
+            resume=resume,
+        )
+        m.completed = len(events_df) if not events_df.empty else 0
 
-    return output_dir
+        if not events_df.empty:
+            parquet_path = output_dir / "ticker_events.parquet"
+            # Merge with any existing data if resuming
+            if resume and parquet_path.exists():
+                existing = pd.read_parquet(parquet_path)
+                events_df = pd.concat([existing, events_df], ignore_index=True)
+                events_df = events_df.drop_duplicates(
+                    subset=["ticker", "composite_figi", "valid_from"], keep="last"
+                )
+            events_df = events_df.sort_values(["composite_figi", "valid_from"]).reset_index(drop=True)
+            events_df.to_parquet(parquet_path, index=False, engine="pyarrow")
+            logger.info(f"Wrote {parquet_path.name} ({len(events_df)} rows)")
+
+            m.rows_written = len(events_df)
+            m.files_written = 1
+            m.bytes_written = parquet_path.stat().st_size
+
+    return m.result

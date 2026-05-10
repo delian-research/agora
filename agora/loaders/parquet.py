@@ -29,8 +29,9 @@ Examples:
 from __future__ import annotations
 
 import logging
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Literal, Sequence
+from typing import Literal
 
 import pandas as pd
 
@@ -273,27 +274,80 @@ class FlatFileLoader:
             return pd.DataFrame()
         return pd.read_parquet(path)
 
-    def get_splits(self, ticker: str | None = None) -> pd.DataFrame:
-        """Load stock splits. Optionally filter to a single ticker."""
-        path = self._data_dir / "reference" / "splits.parquet"
+    def get_splits(
+        self,
+        tickers: str | Sequence[str] | None = None,
+        *,
+        start: str | None = None,
+        end: str | None = None,
+    ) -> pd.DataFrame:
+        """Load stock splits with optional ticker basket and date-range filters.
+
+        Args:
+            tickers: One or more ticker symbols, or ``None`` for all.
+            start: Earliest execution date (YYYY-MM-DD inclusive).
+            end:   Latest execution date (YYYY-MM-DD inclusive).
+        """
+        return self._load_event_frame(
+            "reference/splits.parquet",
+            date_col="execution_date",
+            tickers=tickers,
+            start=start,
+            end=end,
+        )
+
+    def get_dividends(
+        self,
+        tickers: str | Sequence[str] | None = None,
+        *,
+        start: str | None = None,
+        end: str | None = None,
+    ) -> pd.DataFrame:
+        """Load stock dividends with optional ticker basket and date-range filters.
+
+        Args:
+            tickers: One or more ticker symbols, or ``None`` for all.
+            start: Earliest ex-dividend date (YYYY-MM-DD inclusive).
+            end:   Latest ex-dividend date (YYYY-MM-DD inclusive).
+        """
+        return self._load_event_frame(
+            "reference/dividends.parquet",
+            date_col="ex_dividend_date",
+            tickers=tickers,
+            start=start,
+            end=end,
+        )
+
+    def _load_event_frame(
+        self,
+        relpath: str,
+        *,
+        date_col: str,
+        tickers: str | Sequence[str] | None,
+        start: str | None,
+        end: str | None,
+    ) -> pd.DataFrame:
+        """Shared loader for ticker-keyed event tables (dividends, splits)."""
+        path = self._data_dir / relpath
         if not path.exists():
             return pd.DataFrame()
 
         df = pd.read_parquet(path)
-        if ticker:
-            df = df[df["ticker"] == ticker.upper()]
-        return df.sort_values("execution_date").reset_index(drop=True)
+        if df.empty:
+            return df
 
-    def get_dividends(self, ticker: str | None = None) -> pd.DataFrame:
-        """Load stock dividends. Optionally filter to a single ticker."""
-        path = self._data_dir / "reference" / "dividends.parquet"
-        if not path.exists():
-            return pd.DataFrame()
+        if tickers is not None:
+            if isinstance(tickers, str):
+                tickers = [tickers]
+            wanted = {t.upper() for t in tickers if t and t.strip()}
+            df = df[df["ticker"].isin(wanted)]
 
-        df = pd.read_parquet(path)
-        if ticker:
-            df = df[df["ticker"] == ticker.upper()]
-        return df.sort_values("ex_dividend_date").reset_index(drop=True)
+        if start:
+            df = df[df[date_col] >= pd.Timestamp(start)]
+        if end:
+            df = df[df[date_col] <= pd.Timestamp(end)]
+
+        return df.sort_values([date_col, "ticker"]).reset_index(drop=True)
 
     # ── Security Master ──────────────────────────────────────────────
 

@@ -61,9 +61,10 @@ import json
 import logging
 import threading
 from collections import deque
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Iterable, Optional, Union
+from typing import Any, TextIO
 
 from massive import WebSocketClient
 from massive.websocket.models.common import Feed, Market
@@ -157,11 +158,11 @@ class WebSocketStreamer:
 
     def __init__(
         self,
-        market: Union[str, Market] = "stocks",
+        market: str | Market = "stocks",
         *,
-        feed: Union[str, Feed] = Feed.Delayed,
-        api_key: Optional[str] = None,
-        config: Optional[MassiveConfig] = None,
+        feed: str | Feed = Feed.Delayed,
+        api_key: str | None = None,
+        config: MassiveConfig | None = None,
         max_reconnects: int = 5,
         raw: bool = False,
     ):
@@ -188,13 +189,13 @@ class WebSocketStreamer:
             raw=raw,
         )
 
-        self._handlers: list[tuple[Optional[set[str]], HandlerFn]] = []
+        self._handlers: list[tuple[set[str] | None, HandlerFn]] = []
         self._subs: set[str] = set()
 
         # Optional capture mechanisms
-        self._buffer: Optional[deque] = None
-        self._jsonl_path: Optional[Path] = None
-        self._jsonl_fh = None
+        self._buffer: deque | None = None
+        self._jsonl_path: Path | None = None
+        self._jsonl_fh: TextIO | None = None
         self._lock = threading.Lock()
 
     # ── Subscription helpers ────────────────────────────────────────
@@ -296,9 +297,9 @@ class WebSocketStreamer:
 
     def on_message(
         self,
-        fn: Optional[HandlerFn] = None,
+        fn: HandlerFn | None = None,
         *,
-        events: Optional[Iterable[str]] = None,
+        events: Iterable[str] | None = None,
     ) -> HandlerFn:
         """Register a handler. Usable as decorator or direct call.
 
@@ -342,7 +343,7 @@ class WebSocketStreamer:
     def buffered(self) -> list:
         return list(self._buffer or [])
 
-    def dump_to_jsonl(self, path: Union[str, Path]) -> None:
+    def dump_to_jsonl(self, path: str | Path) -> None:
         """Stream every received message to a JSONL file (one event per line)."""
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -358,8 +359,7 @@ class WebSocketStreamer:
         # ``event_type`` attribute holding the channel code.
         for m in msgs:
             event_code = getattr(m, "event_type", None)
-            if hasattr(event_code, "value"):
-                event_code = event_code.value
+            event_code = getattr(event_code, "value", event_code)
 
             # Buffer + JSONL sink first so capture happens regardless of
             # whether handlers raise.
@@ -377,7 +377,7 @@ class WebSocketStreamer:
                 except Exception:
                     logger.exception("handler %s raised", handler)
 
-    def run(self, timeout: Optional[float] = None) -> None:
+    def run(self, timeout: float | None = None) -> None:
         """Connect and process messages (blocking).
 
         Parameters
@@ -394,7 +394,7 @@ class WebSocketStreamer:
                 "will be received but only processed if buffer/jsonl is enabled."
             )
 
-        timer: Optional[threading.Timer] = None
+        timer: threading.Timer | None = None
         if timeout is not None:
             timer = threading.Timer(timeout, _thread.interrupt_main)
             timer.daemon = True
@@ -439,7 +439,7 @@ class WebSocketStreamer:
             finally:
                 self._jsonl_fh = None
 
-    def __enter__(self) -> "WebSocketStreamer":
+    def __enter__(self) -> WebSocketStreamer:
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:

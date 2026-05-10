@@ -29,5 +29,5 @@ warnings.warn(
 # Re-export the entire public surface. Using `from … import *` style
 # explicitly to keep IDE autocomplete and `from agora.loaders.s3 import X`
 # working for every name.
-from agora.loaders.parquet import *  # noqa: F401,F403
-from agora.loaders.parquet import FlatFileLoader  # noqa: F401  (explicit re-export)
+from agora.loaders.parquet import *  # noqa: E402,F401,F403
+from agora.loaders.parquet import FlatFileLoader  # noqa: E402,F401  (explicit re-export)

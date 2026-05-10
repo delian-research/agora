@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 import pandas as pd
 
 from agora.normalize.base import normalize_records
-
 
 _DIVIDEND_DATE_COLUMNS = [
     "declaration_date",

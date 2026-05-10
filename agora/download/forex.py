@@ -1,5 +1,7 @@
 """Download forex (XXX→USD) daily OHLCV via REST API → Parquet."""
 
+from __future__ import annotations
+
 import datetime
 import logging
 import time
@@ -11,6 +13,8 @@ from massive.exceptions import BadResponse
 
 from .checkpoint import Checkpoint
 from .config import DATA_DIR, REST_RATE_LIMIT
+from .metrics import download_metrics
+from .result import DownloadResult
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +33,7 @@ def download_forex(
     api_key: str | None = None,
     years_back: int = 2,
     resume: bool = True,
-) -> Path:
+) -> DownloadResult:
     """Download daily OHLCV for all foreign-currency-to-USD pairs.
 
     Args:
@@ -39,7 +43,9 @@ def download_forex(
         resume: If True, skip tickers already downloaded.
 
     Returns:
-        Path to the output Parquet file.
+        :class:`DownloadResult` with row/byte counts, timing, and the
+        list of pairs that failed (if any). ``result.output_dir`` is the
+        directory containing ``daily_usd.parquet``.
     """
     import os
 
@@ -52,95 +58,104 @@ def download_forex(
     key = api_key or os.getenv("MASSIVE_API_KEY")
     client = RESTClient(api_key=key)
 
-    # Date range
     end_date = datetime.date.today()
     start_date = end_date - datetime.timedelta(days=years_back * 365)
 
-    # Get ticker list
     pairs = _get_usd_pairs(client)
     logger.info(f"Found {len(pairs)} USD pairs to download")
     logger.info(f"Date range: {start_date} → {end_date}")
     logger.info(f"Rate limit: {REST_RATE_LIMIT} calls/min ({CALL_INTERVAL:.0f}s between calls)")
 
     all_frames = []
-
-    # Load any existing data to append to
     if resume and parquet_path.exists():
         existing = pd.read_parquet(parquet_path)
         all_frames.append(existing)
         logger.info(f"Loaded existing data: {len(existing)} rows")
 
-    completed = 0
-    skipped = 0
+    with download_metrics(
+        "download_forex",
+        output_dir=output_dir,
+        checkpoint_path=checkpoint._path,
+    ) as m:
+        m.requested = len(pairs)
+        completed = 0
 
-    for i, ticker in enumerate(pairs):
-        if resume and checkpoint.is_done(ticker):
-            skipped += 1
-            continue
+        for ticker in pairs:
+            if resume and checkpoint.is_done(ticker):
+                m.skipped += 1
+                continue
 
-        # Rate limiting
-        if completed > 0:
-            time.sleep(CALL_INTERVAL)
+            # Rate limiting
+            if completed > 0:
+                time.sleep(CALL_INTERVAL)
 
-        try:
-            aggs = list(client.list_aggs(
-                ticker=ticker,
-                multiplier=1,
-                timespan="day",
-                from_=start_date.isoformat(),
-                to=end_date.isoformat(),
-                adjusted=True,
-                sort="asc",
-                limit=50000,
-            ))
+            try:
+                aggs = list(client.list_aggs(
+                    ticker=ticker,
+                    multiplier=1,
+                    timespan="day",
+                    from_=start_date.isoformat(),
+                    to=end_date.isoformat(),
+                    adjusted=True,
+                    sort="asc",
+                    limit=50000,
+                ))
 
-            if aggs:
-                rows = []
-                for a in aggs:
-                    rows.append({
-                        "date": pd.to_datetime(a.timestamp, unit="ms", utc=True).date(),
-                        "ticker": ticker,
-                        "open": a.open,
-                        "high": a.high,
-                        "low": a.low,
-                        "close": a.close,
-                        "volume": a.volume,
-                        "trades": getattr(a, "transactions", None),
-                    })
-                df = pd.DataFrame(rows)
-                df["date"] = pd.to_datetime(df["date"])
-                all_frames.append(df)
+                if aggs:
+                    rows = []
+                    for a in aggs:
+                        rows.append({
+                            "date": pd.to_datetime(a.timestamp, unit="ms", utc=True).date(),
+                            "ticker": ticker,
+                            "open": a.open,
+                            "high": a.high,
+                            "low": a.low,
+                            "close": a.close,
+                            "volume": a.volume,
+                            "trades": getattr(a, "transactions", None),
+                        })
+                    df = pd.DataFrame(rows)
+                    df["date"] = pd.to_datetime(df["date"])
+                    all_frames.append(df)
 
-            completed += 1
-            checkpoint.mark_done(ticker)
-
-            if completed % 10 == 0:
-                logger.info(
-                    f"  Progress: {completed + skipped}/{len(pairs)} "
-                    f"({completed} downloaded, {skipped} skipped)"
-                )
-
-        except BadResponse as e:
-            if "NOT_AUTHORIZED" in str(e):
-                logger.warning(f"  {ticker}: Not authorized, skipping")
+                completed += 1
+                m.completed += 1
                 checkpoint.mark_done(ticker)
-                skipped += 1
-            else:
-                logger.error(f"  {ticker}: API error: {e}")
-                # Don't mark as done — will retry on next run
 
-    # Combine and write
-    if all_frames:
-        combined = pd.concat(all_frames, ignore_index=True)
-        combined["date"] = pd.to_datetime(combined["date"])
-        combined = combined.sort_values(["date", "ticker"]).reset_index(drop=True)
-        combined = combined.drop_duplicates(subset=["date", "ticker"], keep="last")
-        combined.to_parquet(parquet_path, index=False, engine="pyarrow")
+                if completed % 10 == 0:
+                    logger.info(
+                        f"  Progress: {completed + m.skipped}/{len(pairs)} "
+                        f"({completed} downloaded, {m.skipped} skipped)"
+                    )
 
-        size_mb = parquet_path.stat().st_size / (1024 * 1024)
-        logger.info(
-            f"Done: Wrote {parquet_path.name} "
-            f"({len(combined)} rows, {combined['ticker'].nunique()} pairs, {size_mb:.1f} MB)"
-        )
+            except BadResponse as e:
+                if "NOT_AUTHORIZED" in str(e):
+                    logger.warning(f"  {ticker}: Not authorized, skipping")
+                    checkpoint.mark_done(ticker)
+                    m.skipped += 1
+                else:
+                    logger.error(f"  {ticker}: API error: {e}")
+                    m.failed.append(ticker)
+                    # Don't mark as done — will retry on next run
+
+        # Combine and write
+        if all_frames:
+            combined = pd.concat(all_frames, ignore_index=True)
+            combined["date"] = pd.to_datetime(combined["date"])
+            combined = combined.sort_values(["date", "ticker"]).reset_index(drop=True)
+            combined = combined.drop_duplicates(subset=["date", "ticker"], keep="last")
+            combined.to_parquet(parquet_path, index=False, engine="pyarrow")
+
+            file_bytes = parquet_path.stat().st_size
+            size_mb = file_bytes / (1024 * 1024)
+            logger.info(
+                f"Done: Wrote {parquet_path.name} "
+                f"({len(combined)} rows, {combined['ticker'].nunique()} pairs, {size_mb:.1f} MB)"
+            )
+            m.rows_written = len(combined)
+            m.files_written = 1
+            m.bytes_written = file_bytes
+
+    return m.result
 
     return parquet_path

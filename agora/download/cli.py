@@ -1,11 +1,10 @@
 """CLI entrypoint for downloading historical market data."""
 
+from __future__ import annotations
+
 import argparse
 import logging
-import sys
 from pathlib import Path
-
-from .config import DATA_DIR
 
 
 def setup_logging(verbose: bool = False):
@@ -57,7 +56,7 @@ def cmd_all(args):
     cmd_events(args)
 
 
-def main():
+def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="agora-download",
         description="Download historical market data from Massive/Polygon flat files and REST API.",
@@ -68,39 +67,46 @@ def main():
 
     subparsers = parser.add_subparsers(dest="command")
 
-    # stocks
     sp = subparsers.add_parser("stocks", help="Download US stock daily OHLCV via S3 flat files")
     sp.add_argument("--start-year", type=int, default=2021, help="Start year (default: 2021)")
     sp.add_argument("--end-year", type=int, default=2026, help="End year (default: 2026)")
     sp.set_defaults(func=cmd_stocks)
 
-    # forex
     sp = subparsers.add_parser("forex", help="Download forex XXX→USD daily OHLCV via REST API")
     sp.set_defaults(func=cmd_forex)
 
-    # reference
     sp = subparsers.add_parser("reference", help="Download reference data (tickers, exchanges, splits, dividends)")
     sp.set_defaults(func=cmd_reference)
 
-    # events
     sp = subparsers.add_parser("events", help="Download ticker events → security master (valid_from/valid_to)")
     sp.set_defaults(func=cmd_events)
 
-    # all
     sp = subparsers.add_parser("all", help="Download everything")
     sp.add_argument("--start-year", type=int, default=2021)
     sp.add_argument("--end-year", type=int, default=2026)
     sp.set_defaults(func=cmd_all)
 
-    args = parser.parse_args()
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    """CLI entrypoint. Returns the process exit code.
+
+    Args:
+        argv: Argument list (excludes program name). When ``None`` (the
+            default), parses ``sys.argv``. Tests pass an explicit list.
+    """
+    parser = _build_parser()
+    args = parser.parse_args(argv)
     setup_logging(args.verbose)
 
     if not args.command:
         parser.print_help()
-        sys.exit(1)
+        return 1
 
     args.func(args)
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
