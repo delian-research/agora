@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import re
-from typing import Any, Dict, Iterable, Mapping, Optional
+from collections.abc import Iterable, Mapping
+from typing import Any
 
 import pandas as pd
-
 
 _MS_MIN = 1.0e11
 _MS_MAX = 1.0e13
@@ -20,8 +20,8 @@ def to_snake_case(name: str) -> str:
     return converted.lower()
 
 
-def flatten_record(record: Mapping[str, Any], *, prefix: str = "") -> Dict[str, Any]:
-    flat: Dict[str, Any] = {}
+def flatten_record(record: Mapping[str, Any], *, prefix: str = "") -> dict[str, Any]:
+    flat: dict[str, Any] = {}
     for key, value in record.items():
         snake_key = to_snake_case(str(key))
         flat_key = f"{prefix}_{snake_key}" if prefix else snake_key
@@ -33,7 +33,7 @@ def flatten_record(record: Mapping[str, Any], *, prefix: str = "") -> Dict[str, 
     return flat
 
 
-def _infer_epoch_unit(col_name: str, series: pd.Series) -> Optional[str]:
+def _infer_epoch_unit(col_name: str, series: pd.Series) -> str | None:
     if col_name.endswith("_ms"):
         return "ms"
     if col_name.endswith("_ns"):
@@ -55,7 +55,7 @@ def _normalize_epoch_columns(df: pd.DataFrame) -> pd.DataFrame:
         return df
 
     renamed = df.copy()
-    rename_map: Dict[str, str] = {}
+    rename_map: dict[str, str] = {}
     epoch_cols: list[tuple[str, str]] = []
 
     for col in list(renamed.columns):

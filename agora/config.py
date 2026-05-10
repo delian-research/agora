@@ -5,13 +5,18 @@ Configuration management
 
 import os
 from dataclasses import dataclass
-from typing import Optional
+from typing import overload
+
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
 load_dotenv()
 
 
+@overload
+def _env(new_name: str, old_name: str, default: str) -> str: ...
+@overload
+def _env(new_name: str, old_name: str, default: None = None) -> str | None: ...
 def _env(new_name: str, old_name: str, default: str | None = None) -> str | None:
     """Read an env var with fallback to a legacy name."""
     return os.getenv(new_name) or os.getenv(old_name) or default
@@ -48,7 +53,7 @@ class MassiveConfig:
             raise ValueError(f"Max retries must be non-negative, got {self.max_retries}")
 
     @classmethod
-    def from_env(cls, api_key: Optional[str] = None) -> 'MassiveConfig':
+    def from_env(cls, api_key: str | None = None) -> 'MassiveConfig':
         """
         Load configuration from environment variables.
 

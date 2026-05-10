@@ -20,8 +20,9 @@ from __future__ import annotations
 
 import datetime
 import logging
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Literal, Sequence
+from typing import Literal
 
 import numpy as np
 import pandas as pd
@@ -74,9 +75,9 @@ def _resolve_dates(
             raise ValueError(
                 f"Invalid period {period!r}. Allowed: {sorted(_ALLOWED_PERIODS)}"
             )
-        end_dt = datetime.datetime.now(datetime.timezone.utc)
+        end_dt = datetime.datetime.now(datetime.UTC)
         if period == "ytd":
-            start_dt = datetime.datetime(end_dt.year, 1, 1, tzinfo=datetime.timezone.utc)
+            start_dt = datetime.datetime(end_dt.year, 1, 1, tzinfo=datetime.UTC)
         else:
             start_dt = end_dt - _PERIOD_DELTAS[period]
         return start_dt.date().isoformat(), end_dt.date().isoformat()

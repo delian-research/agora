@@ -6,17 +6,17 @@ with exponential backoff retry logic, comprehensive error handling, and
 response normalization utilities.
 """
 
-from typing import Any, Callable, TypeVar, Optional
+import logging
+import time
+from collections.abc import Callable
+from functools import wraps
+from typing import Any, TypeVar
 
 from massive import RESTClient
-
-import time
-import logging
-from functools import wraps
-from massive.exceptions import BadResponse, AuthError
+from massive.exceptions import AuthError, BadResponse
 
 from agora.config import MassiveConfig
-from agora.errors import MassiveAPIError, MassiveRateLimitError, MassiveAuthenticationError
+from agora.errors import MassiveAPIError, MassiveAuthenticationError, MassiveRateLimitError
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -26,7 +26,7 @@ T = TypeVar('T')
 
 
 def retry_with_backoff(
-    max_retries: Optional[int] = None,
+    max_retries: int | None = None,
     initial_delay: float = 1.0,
     backoff_factor: float = 2.0,
     max_delay: float = 60.0
@@ -143,7 +143,7 @@ class MassiveDataApi:
         >>> snapshot = client.get_snapshot('AAPL')
     """
 
-    def __init__(self, config: Optional[MassiveConfig] = None):
+    def __init__(self, config: MassiveConfig | None = None):
         """
         Initialize Massive client.
 

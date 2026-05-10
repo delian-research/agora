@@ -1,12 +1,13 @@
-from datetime import datetime, timezone, timedelta
-from typing import Iterable, Literal, Optional
+from collections.abc import Iterable
+from datetime import UTC, datetime, timedelta
+from typing import Literal
 
 import numpy as np
 import pandas as pd
 
-from agora.client import MassiveClient, get_client as _get_client
+from agora.client import MassiveClient
+from agora.client import get_client as _get_client
 from agora.errors import MassiveAPIError
-
 
 _client: MassiveClient|None = None
 
@@ -32,9 +33,9 @@ CalendarMode = Literal["union", "intersection"]
 
 
 def _resolve_dates(
-    start: Optional[str],
-    end: Optional[str],
-    period: Optional[str],
+    start: str | None,
+    end: str | None,
+    period: str | None,
 ) -> tuple[str, str]:
     if period and (start or end):
         raise ValueError("Use either period OR start/end, not both.")
@@ -42,9 +43,9 @@ def _resolve_dates(
     if period:
         if period not in _ALLOWED_PERIODS:
             raise ValueError(f"Invalid period '{period}'. Allowed: {sorted(_ALLOWED_PERIODS)}")
-        end_dt = datetime.now(timezone.utc)
+        end_dt = datetime.now(UTC)
         if period == "ytd":
-            start_dt = datetime(end_dt.year, 1, 1, tzinfo=timezone.utc)
+            start_dt = datetime(end_dt.year, 1, 1, tzinfo=UTC)
         else:
             start_dt = end_dt - _PERIOD_DELTAS[period]
         return start_dt.date().isoformat(), end_dt.date().isoformat()
@@ -72,14 +73,14 @@ def _align_index(
 def get_prices(
     tickers: Iterable[str],
     *,
-    start: Optional[str] = None,
-    end: Optional[str] = None,
-    period: Optional[str] = None,
+    start: str | None = None,
+    end: str | None = None,
+    period: str | None = None,
     adjust: bool = True,
     fill: bool = False,
     ohlcv: bool = False,
     calendar: CalendarMode = "union",
-    client: Optional[MassiveClient] = None,
+    client: MassiveClient | None = None,
 ) -> pd.DataFrame:
     """Fetch daily prices for one or more tickers.
 
@@ -168,13 +169,13 @@ def get_prices(
 def get_returns(
     tickers: Iterable[str],
     *,
-    start: Optional[str] = None,
-    end: Optional[str] = None,
-    period: Optional[str] = None,
+    start: str | None = None,
+    end: str | None = None,
+    period: str | None = None,
     method: ReturnMethod = "simple",
     adjust: bool = True,
     fill: bool = True,
-    client: Optional[MassiveClient] = None,
+    client: MassiveClient | None = None,
 ) -> pd.DataFrame:
     """Compute daily returns for one or more tickers.
 
