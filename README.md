@@ -313,6 +313,13 @@ Long-form documentation lives under `dovs/`:
 - `dovs/1.Updates.md` — change log
 - `dovs/2.Projects.md` — project objectives
 
+Runnable examples are in `examples/`:
+
+- `examples/equities_quickstart.ipynb` — Jupyter tour of the
+  `agora.equities` surface (market data, reference, corporate actions,
+  fundamentals, short data, ETF, classification). Requires
+  `MASSIVE_API_KEY`.
+
 Operational guidance for AI coding agents: see `AGENTS.md`.
 
 ## License
