@@ -7,9 +7,10 @@ not "REST endpoints" or "Parquet paths."
 Public surface (a "verb-shape" list):
 
     Market
-        get_daily_prices  — pivoted OHLCV matrix over a date range
-        get_daily_returns — daily simple/log returns
-        get_volume        — daily share volume (split-adjusted)
+        get_daily_prices  — per-ticker OHLCV time-series via REST
+        get_daily_returns — daily simple/log returns via REST
+        get_volume        — daily share volume via REST (split-adjusted)
+        get_daily_grouped — all-tickers cross-section for one date
         get_snapshot      — current market snapshot (live REST)
 
     Reference (stubs in v1)
@@ -46,6 +47,7 @@ from agora.equities.company import (
 
 # ── Market ──────────────────────────────────────────────────────────
 from agora.equities.market import (
+    get_daily_grouped,
     get_daily_prices,
     get_daily_returns,
     get_snapshot,
@@ -69,6 +71,7 @@ __all__ = [
     "get_daily_prices",
     "get_daily_returns",
     "get_volume",
+    "get_daily_grouped",
     "get_snapshot",
     # Reference
     "get_exchange",

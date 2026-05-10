@@ -1,15 +1,21 @@
-"""Equity market data — historical bars, returns, volume, and live snapshots.
+"""Equity market data — historical bars, returns, volume, snapshots, grouped.
 
-Public functions:
+Public functions (all API-only — `agora` is a thin client over the
+Massive REST API; downstream packages handle local caching):
+
     - :func:`get_daily_prices` — pivoted OHLCV matrix over a date range
-    - :func:`get_daily_returns` — daily returns derived from prices
-    - :func:`get_volume` — daily share volume (split-adjusted by default)
-    - :func:`get_snapshot` — current market snapshot (live REST only)
+      (per-ticker time-series; one API call per ticker).
+    - :func:`get_daily_returns` — daily returns derived from prices.
+    - :func:`get_volume` — daily share volume (split-adjusted by default
+      via Polygon's ``adjusted=true`` query parameter).
+    - :func:`get_daily_grouped` — all-tickers cross-section for one date
+      (single bulk API call returning ~10K rows).
+    - :func:`get_snapshot` — current market snapshot.
 
-The historical functions (`get_daily_prices`, `get_daily_returns`,
-`get_volume`) read from the local Parquet store by default — no rate
-limit, no API calls. Pass ``source="rest"`` to fetch live from the
-Massive REST API instead (per-ticker; slower).
+The :func:`_apply_split_adjustment` helper remains exported for callers
+that want client-side split adjustment from a separate splits source —
+it is no longer in the default code path because Polygon's
+``adjusted=True`` query parameter is the source-of-truth and faster.
 
 Future: ``get_adv()`` and ``get_volatility()`` are derived stats that
 will be added here when the use case shows up. Both are computed from
@@ -21,7 +27,6 @@ from __future__ import annotations
 import datetime
 import logging
 from collections.abc import Sequence
-from pathlib import Path
 from typing import Literal
 
 import numpy as np
@@ -29,7 +34,6 @@ import pandas as pd
 
 from agora.client import MassiveClient, get_client
 from agora.errors import MassiveAPIError
-from agora.loaders.parquet import FlatFileLoader
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +60,6 @@ _PERIOD_DELTAS = {
 _VALID_FIELDS = ("open", "high", "low", "close", "volume", "trades", "vwap")
 
 ReturnMethod = Literal["simple", "log"]
-Source = Literal["parquet", "rest"]
 Calendar = Literal["union", "intersection"]
 
 
@@ -128,6 +131,10 @@ def _apply_split_adjustment(
     historical price gets divided down to today's basis, and historical
     volume gets multiplied up by the same factor (so dollar volume is
     preserved across the split).
+
+    Not used by the default code path (Polygon's ``adjusted=True`` does
+    this server-side). Kept as a callable utility for callers that want
+    to do client-side adjustment from a separately-fetched splits source.
     """
     if prices.empty or splits.empty:
         return prices
@@ -156,26 +163,7 @@ def _apply_split_adjustment(
     return out
 
 
-# ── Source: parquet ─────────────────────────────────────────────────
-
-def _fetch_parquet(
-    tickers: list[str],
-    start: str,
-    end: str,
-    adjusted: bool,
-    data_dir: Path | str | None,
-) -> pd.DataFrame:
-    """Long-format OHLCV DataFrame from local Parquet."""
-    loader = FlatFileLoader(data_dir=data_dir)
-    df = loader.get_stock_daily(tickers, start=start, end=end)
-    if df.empty:
-        return df
-    if adjusted:
-        df = _apply_split_adjustment(df, loader.get_splits())
-    return df
-
-
-# ── Source: rest ────────────────────────────────────────────────────
+# ── Per-ticker REST fetch ───────────────────────────────────────────
 
 def _fetch_rest(
     tickers: list[str],
@@ -307,14 +295,16 @@ def get_daily_prices(
     period: str | None = None,
     fields: str | Sequence[str] = "close",
     adjusted: bool = True,
-    source: Source = "parquet",
     fill: bool = False,
     calendar: Calendar = "union",
     strict: bool = False,
-    data_dir: Path | str | None = None,
     client: MassiveClient | None = None,
 ) -> pd.DataFrame:
-    """Daily OHLCV prices for a basket of equity tickers.
+    """Daily OHLCV prices for a basket of equity tickers via REST.
+
+    Issues one API call per ticker. For wide-universe queries on a single
+    date, prefer :func:`get_daily_grouped`. For caching across calls,
+    layer your own cache on top of this — `agora` is the thin API client.
 
     Args:
         tickers: One or more ticker symbols.
@@ -324,21 +314,21 @@ def get_daily_prices(
             ``"3mo"``, ``"6mo"``, ``"1y"``, ``"2y"``, ``"5y"``, ``"10y"``, ``"ytd"``.
         fields: Which OHLCV column(s) to return. Single string returns a flat
             matrix; sequence returns a MultiIndex ``(field, ticker)``.
-        adjusted: Apply split adjustment. For ``source="parquet"``, splits are
-            applied locally from ``data/reference/splits.parquet``. For
-            ``source="rest"``, the API returns adjusted prices directly.
-        source: ``"parquet"`` (local, fast) or ``"rest"`` (live, per-ticker).
+        adjusted: Apply split adjustment server-side (Polygon's
+            ``adjusted=True`` query parameter). Default ``True``. Set to
+            ``False`` to receive raw exchange prices and run
+            :func:`_apply_split_adjustment` yourself with a
+            separately-sourced splits frame.
         fill: Forward-fill missing values across the index.
         calendar: How to align dates across tickers.
             ``"union"`` (default) keeps every date any ticker traded.
             ``"intersection"`` keeps only dates where every requested
             ticker has data — useful for cross-section analysis where
             unequal trading windows cause issues.
-        strict: When ``source="rest"`` and any per-ticker API call fails,
-            ``strict=True`` re-raises the first error and aborts.
-            ``strict=False`` (default) logs a warning, skips the failing
-            ticker, and exposes the list as ``df.attrs["failed_tickers"]``.
-        data_dir: Override the Parquet data directory.
+        strict: When any per-ticker API call fails, ``strict=True``
+            re-raises the first error and aborts. ``strict=False``
+            (default) logs a warning, skips the failing ticker, and
+            exposes the list as ``df.attrs["failed_tickers"]``.
         client: Override the live REST client.
 
     Returns:
@@ -349,7 +339,7 @@ def get_daily_prices(
         - Multi-field call (``fields=("open","close","volume")``): columns
           are a MultiIndex of ``(field, ticker)``.
 
-        If any tickers failed in non-strict REST mode, the returned
+        If any tickers failed in non-strict mode, the returned
         DataFrame's ``.attrs["failed_tickers"]`` is set to the list of
         failed symbols.
 
@@ -365,15 +355,9 @@ def get_daily_prices(
     fields_list, is_single = _norm_fields(fields)
     start_date, end_date = _resolve_dates(start, end, period)
 
-    failed: list[tuple[str, Exception]] = []
-    if source == "parquet":
-        df = _fetch_parquet(tickers_list, start_date, end_date, adjusted, data_dir)
-    elif source == "rest":
-        df, failed = _fetch_rest(
-            tickers_list, start_date, end_date, adjusted, client, strict=strict,
-        )
-    else:
-        raise ValueError(f"source must be 'parquet' or 'rest', got {source!r}")
+    df, failed = _fetch_rest(
+        tickers_list, start_date, end_date, adjusted, client, strict=strict,
+    )
 
     if df.empty:
         if failed:
@@ -409,14 +393,12 @@ def get_daily_returns(
     period: str | None = None,
     method: ReturnMethod = "simple",
     adjusted: bool = True,
-    source: Source = "parquet",
     fill: bool = True,
     calendar: Calendar = "union",
     strict: bool = False,
-    data_dir: Path | str | None = None,
     client: MassiveClient | None = None,
 ) -> pd.DataFrame:
-    """Daily returns for a basket of equity tickers.
+    """Daily returns for a basket of equity tickers via REST.
 
     Wraps :func:`get_daily_prices` with ``fields="close"`` and computes
     period-over-period returns.
@@ -434,9 +416,9 @@ def get_daily_returns(
     prices = get_daily_prices(
         tickers, start, end,
         period=period, fields="close",
-        adjusted=adjusted, source=source, fill=fill,
+        adjusted=adjusted, fill=fill,
         calendar=calendar, strict=strict,
-        data_dir=data_dir, client=client,
+        client=client,
     )
     if prices.empty:
         return prices
@@ -462,18 +444,16 @@ def get_volume(
     *,
     period: str | None = None,
     adjusted: bool = True,
-    source: Source = "parquet",
     fill: bool = False,
     calendar: Calendar = "union",
     strict: bool = False,
-    data_dir: Path | str | None = None,
     client: MassiveClient | None = None,
 ) -> pd.DataFrame:
-    """Daily share volume for a basket of equity tickers.
+    """Daily share volume for a basket of equity tickers via REST.
 
     Wraps :func:`get_daily_prices` with ``fields="volume"``. With
-    ``adjusted=True`` (default) historical volume is scaled up by the
-    cumulative split ratio so dollar volume is preserved across splits.
+    ``adjusted=True`` (default) the API returns volumes scaled to today's
+    share basis so dollar volume is preserved across splits.
 
     Returns:
         DataFrame indexed by date with one column per ticker.
@@ -481,10 +461,83 @@ def get_volume(
     return get_daily_prices(
         tickers, start, end,
         period=period, fields="volume",
-        adjusted=adjusted, source=source, fill=fill,
+        adjusted=adjusted, fill=fill,
         calendar=calendar, strict=strict,
-        data_dir=data_dir, client=client,
+        client=client,
     )
+
+
+def get_daily_grouped(
+    date: str,
+    *,
+    adjusted: bool = True,
+    include_otc: bool = False,
+    tickers: Sequence[str] | None = None,
+    client: MassiveClient | None = None,
+) -> pd.DataFrame:
+    """All-tickers cross-section of daily OHLCV for a single date.
+
+    A single bulk API call returning ~10K rows (every active stock that
+    traded on ``date``). Faster than :func:`get_daily_prices` when the
+    ratio of tickers to days is high — see module docs for the crossover
+    rule of thumb.
+
+    Args:
+        date: Trading date (YYYY-MM-DD). Returns an empty frame for
+            weekends / holidays.
+        adjusted: Server-side split adjustment via Polygon's
+            ``adjusted=true`` query parameter. Default ``True``.
+        include_otc: Include OTC securities. Default ``False``.
+        tickers: Optional subset filter applied **after** the bulk pull.
+            ``None`` returns every ticker the API returned.
+        client: Override the live REST client.
+
+    Returns:
+        DataFrame with one row per ticker, columns:
+        ``ticker``, ``date``, ``open``, ``high``, ``low``, ``close``,
+        ``volume``, ``vwap``, ``transactions``.
+
+    Examples:
+        >>> get_daily_grouped("2024-01-03")
+        # ~10K rows, one per ticker active that day
+        >>> get_daily_grouped("2024-01-03", tickers=["AAPL", "MSFT"])
+        # filtered to two rows
+    """
+    c = client or get_client()
+    aggs = c.rest.get_grouped_daily_aggs(
+        date, adjusted=adjusted, include_otc=include_otc,
+    )
+
+    if not aggs:
+        return pd.DataFrame(
+            columns=[
+                "ticker", "date", "open", "high", "low", "close",
+                "volume", "vwap", "transactions",
+            ]
+        )
+
+    date_ts = pd.to_datetime(date)
+    rows = []
+    for a in aggs:
+        rows.append({
+            "ticker": getattr(a, "ticker", None),
+            "date": date_ts,
+            "open": getattr(a, "open", None),
+            "high": getattr(a, "high", None),
+            "low": getattr(a, "low", None),
+            "close": getattr(a, "close", None),
+            "volume": getattr(a, "volume", None),
+            "vwap": getattr(a, "vwap", None),
+            "transactions": getattr(a, "transactions", None),
+        })
+
+    df = pd.DataFrame(rows)
+
+    if tickers is not None:
+        wanted = {t.strip().upper() for t in tickers if t and t.strip()}
+        df = df[df["ticker"].isin(wanted)]
+
+    return df.sort_values("ticker").reset_index(drop=True)
 
 
 def get_snapshot(

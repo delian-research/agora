@@ -1,17 +1,14 @@
-"""Tests for the ``agora.equities`` surface.
+"""Tests for the API-first ``agora.equities`` surface.
 
-These cover the implemented `market.py` functions thoroughly. Stub
-modules (reference, cax, company) get a "raises NotImplementedError"
-test apiece — that fails loudly the moment someone *implements* a stub
-and forgets to update the test, which is the right pressure.
-
-Live-API tests (snapshot, REST source) are mocked so CI doesn't need
-secrets and never makes a real network call.
+`agora` is a thin client over the Massive REST API. Downstream packages
+own caching/storage, so these tests mock ``MassiveClient.rest`` and
+never make a real network call. The pure helpers (``_resolve_dates``,
+``_pivot_*``, ``_apply_split_adjustment``) are exercised directly with
+synthetic DataFrames.
 """
 
 from __future__ import annotations
 
-from pathlib import Path
 from unittest.mock import MagicMock
 
 import pandas as pd
@@ -20,28 +17,8 @@ import pytest
 from agora import equities
 from agora.equities import market
 
-# ── Fixtures ────────────────────────────────────────────────────────
-
-REPO_ROOT = Path(__file__).resolve().parents[1]
-DATA_DIR = REPO_ROOT / "data"
-STOCK_DIR = DATA_DIR / "stocks" / "daily"
-REF_DIR = DATA_DIR / "reference"
-
-requires_stocks = pytest.mark.skipif(
-    not STOCK_DIR.exists() or not list(STOCK_DIR.glob("*.parquet")),
-    reason="data/stocks/daily/*.parquet not present (run `agora-download stocks` first)",
-)
-requires_dividends = pytest.mark.skipif(
-    not (REF_DIR / "dividends.parquet").exists(),
-    reason="data/reference/dividends.parquet not present (run `agora-download reference` first)",
-)
-requires_splits = pytest.mark.skipif(
-    not (REF_DIR / "splits.parquet").exists(),
-    reason="data/reference/splits.parquet not present (run `agora-download reference` first)",
-)
-
-
 # ── Surface tests (always run) ──────────────────────────────────────
+
 
 def test_equities_namespace_exposed_at_top_level() -> None:
     import agora
@@ -53,7 +30,8 @@ def test_equities_namespace_exposed_at_top_level() -> None:
 def test_equities_public_surface() -> None:
     expected = {
         # market
-        "get_daily_prices", "get_daily_returns", "get_volume", "get_snapshot",
+        "get_daily_prices", "get_daily_returns", "get_volume",
+        "get_daily_grouped", "get_snapshot",
         # reference
         "get_exchange", "get_currency", "get_country",
         "get_market_cap", "get_shares_out",
@@ -83,6 +61,7 @@ def test_company_subpackage_surface() -> None:
 
 
 # ── Helper-function tests (always run) ──────────────────────────────
+
 
 class TestNormHelpers:
     def test_norm_tickers_str(self) -> None:
@@ -137,6 +116,9 @@ class TestResolveDates:
 
 
 # ── Split adjustment math (always run; uses synthetic data) ─────────
+# _apply_split_adjustment is no longer in the default code path but
+# stays exported as a callable utility for client-side adjustment.
+
 
 class TestSplitAdjustment:
     def test_no_splits_returns_unchanged(self) -> None:
@@ -187,6 +169,7 @@ class TestSplitAdjustment:
 
 # ── Pivot tests (always run; use synthetic data) ────────────────────
 
+
 class TestPivot:
     @pytest.fixture
     def long_df(self) -> pd.DataFrame:
@@ -215,84 +198,264 @@ class TestPivot:
         assert out.loc[pd.Timestamp("2024-01-02"), ("volume", "MSFT")] == 200
 
 
-# ── End-to-end against local Parquet (skip if data missing) ─────────
+# ── Fakes for mocked REST calls ─────────────────────────────────────
 
-class TestGetDailyPricesParquet:
-    @requires_stocks
+
+class FakeAgg:
+    """Stand-in for the SDK's Agg bar object (one row of OHLCV)."""
+
+    def __init__(self, ts_ms: int, open: float, high: float, low: float,
+                 close: float, volume: float, vwap: float | None = None,
+                 transactions: int | None = None):
+        self.timestamp = ts_ms
+        self.open = open
+        self.high = high
+        self.low = low
+        self.close = close
+        self.volume = volume
+        self.vwap = vwap
+        self.transactions = transactions
+
+
+class FakeGroupedAgg:
+    """Stand-in for grouped daily aggs (no per-row timestamp; ticker on each)."""
+
+    def __init__(self, ticker: str, open: float, high: float, low: float,
+                 close: float, volume: float, vwap: float | None = None,
+                 transactions: int | None = None):
+        self.ticker = ticker
+        self.open = open
+        self.high = high
+        self.low = low
+        self.close = close
+        self.volume = volume
+        self.vwap = vwap
+        self.transactions = transactions
+
+
+def _ms(date: str) -> int:
+    """ISO date → epoch milliseconds (UTC midnight)."""
+    return int(pd.Timestamp(date, tz="UTC").timestamp() * 1000)
+
+
+# ── get_daily_prices (mocked REST) ──────────────────────────────────
+
+
+class TestGetDailyPricesRest:
+    def _bars_for(self, dates: list[str], close_start: float = 100.0) -> list:
+        return [
+            FakeAgg(
+                ts_ms=_ms(d),
+                open=close_start + i, high=close_start + i + 2,
+                low=close_start + i - 1, close=close_start + i + 1,
+                volume=1_000_000 + i * 1000,
+                vwap=close_start + i + 0.5,
+                transactions=10_000,
+            )
+            for i, d in enumerate(dates)
+        ]
+
     def test_single_ticker_close(self) -> None:
-        prices = equities.get_daily_prices(
-            "AAPL", start="2025-01-01", end="2025-01-15", source="parquet",
+        fake = MagicMock()
+        fake.rest.get_aggregates.return_value = self._bars_for(
+            ["2024-01-02", "2024-01-03", "2024-01-04"]
         )
-        assert not prices.empty
-        assert list(prices.columns) == ["AAPL"]
-        assert prices.index.name == "date"
-
-    @requires_stocks
-    def test_basket_close(self) -> None:
-        prices = equities.get_daily_prices(
-            ["AAPL", "MSFT"], start="2025-01-01", end="2025-01-31",
-            source="parquet",
-        )
-        assert list(prices.columns) == ["AAPL", "MSFT"]
-        assert (prices > 0).all().all()
-
-    @requires_stocks
-    def test_multi_field_returns_multiindex(self) -> None:
         out = equities.get_daily_prices(
-            ["AAPL"], start="2025-01-01", end="2025-01-10",
-            fields=("open", "close", "volume"),
-            source="parquet",
+            "AAPL", start="2024-01-02", end="2024-01-04", client=fake,
         )
+        assert list(out.columns) == ["AAPL"]
+        assert len(out) == 3
+        # close values are start+1, start+2, start+3 → 101, 102, 103
+        assert out["AAPL"].tolist() == [101.0, 102.0, 103.0]
+
+    def test_basket_close(self) -> None:
+        fake = MagicMock()
+        fake.rest.get_aggregates.side_effect = lambda ticker, **kw: (
+            self._bars_for(["2024-01-02", "2024-01-03"], close_start=100.0)
+            if ticker == "AAPL" else
+            self._bars_for(["2024-01-02", "2024-01-03"], close_start=200.0)
+        )
+        out = equities.get_daily_prices(
+            ["AAPL", "MSFT"], start="2024-01-02", end="2024-01-03",
+            client=fake,
+        )
+        assert list(out.columns) == ["AAPL", "MSFT"]
+        assert out.loc[pd.Timestamp("2024-01-02"), "AAPL"] == 101.0
+        assert out.loc[pd.Timestamp("2024-01-02"), "MSFT"] == 201.0
+
+    def test_multi_field_returns_multiindex(self) -> None:
+        fake = MagicMock()
+        fake.rest.get_aggregates.return_value = self._bars_for(
+            ["2024-01-02"]
+        )
+        out = equities.get_daily_prices(
+            "AAPL", start="2024-01-02", end="2024-01-02",
+            fields=("open", "close", "volume"),
+            client=fake,
+        )
+        assert ("open", "AAPL") in out.columns
         assert ("close", "AAPL") in out.columns
         assert ("volume", "AAPL") in out.columns
 
-    @requires_stocks
-    def test_period_works(self) -> None:
-        prices = equities.get_daily_prices(
-            "SPY", period="1mo", source="parquet",
-        )
-        assert not prices.empty
-
-    @requires_stocks
     def test_unknown_ticker_returns_empty(self) -> None:
-        prices = equities.get_daily_prices(
-            "NOTAREALTICKER1234", start="2025-01-01", end="2025-01-10",
-            source="parquet",
+        fake = MagicMock()
+        fake.rest.get_aggregates.return_value = []  # API returned no bars
+        out = equities.get_daily_prices(
+            "NOTAREALTICKER", start="2024-01-02", end="2024-01-04",
+            client=fake,
         )
-        assert prices.empty
+        assert out.empty
+
+    def test_failed_ticker_propagates_via_attrs(self) -> None:
+        from agora.errors import MassiveAPIError
+
+        fake = MagicMock()
+        fake.rest.get_aggregates.side_effect = lambda ticker, **kw: (
+            self._bars_for(["2024-01-02"]) if ticker == "AAPL"
+            else (_ for _ in ()).throw(MassiveAPIError("simulated"))
+        )
+        out = equities.get_daily_prices(
+            ["AAPL", "BROKEN"], start="2024-01-02", end="2024-01-02",
+            client=fake, strict=False,
+        )
+        assert "BROKEN" in out.attrs["failed_tickers"]
+        assert "AAPL" in out.columns
+
+    def test_strict_mode_raises_on_failure(self) -> None:
+        from agora.errors import MassiveAPIError
+
+        fake = MagicMock()
+        fake.rest.get_aggregates.side_effect = MassiveAPIError("simulated")
+        with pytest.raises(MassiveAPIError):
+            equities.get_daily_prices(
+                "AAPL", start="2024-01-02", end="2024-01-02",
+                client=fake, strict=True,
+            )
 
 
-class TestGetDailyReturnsParquet:
-    @requires_stocks
+# ── get_daily_returns (mocked REST) ─────────────────────────────────
+
+
+class TestGetDailyReturnsRest:
     def test_simple_returns(self) -> None:
+        fake = MagicMock()
+        fake.rest.get_aggregates.return_value = [
+            FakeAgg(ts_ms=_ms("2024-01-02"), open=0, high=0, low=0,
+                    close=100.0, volume=0),
+            FakeAgg(ts_ms=_ms("2024-01-03"), open=0, high=0, low=0,
+                    close=110.0, volume=0),
+        ]
         rets = equities.get_daily_returns(
-            "AAPL", start="2025-01-01", end="2025-01-31",
-            method="simple", source="parquet",
+            "AAPL", start="2024-01-02", end="2024-01-03",
+            method="simple", client=fake,
         )
-        assert not rets.empty
-        # Returns are roughly in [-0.5, 0.5]
-        assert rets["AAPL"].abs().max() < 1.0
+        # 100→110 is +10%
+        assert rets.iloc[-1]["AAPL"] == pytest.approx(0.10)
 
-    @requires_stocks
     def test_log_returns(self) -> None:
+        import numpy as np
+
+        fake = MagicMock()
+        fake.rest.get_aggregates.return_value = [
+            FakeAgg(ts_ms=_ms("2024-01-02"), open=0, high=0, low=0,
+                    close=100.0, volume=0),
+            FakeAgg(ts_ms=_ms("2024-01-03"), open=0, high=0, low=0,
+                    close=110.0, volume=0),
+        ]
         rets = equities.get_daily_returns(
-            "AAPL", start="2025-01-01", end="2025-01-31",
-            method="log", source="parquet",
+            "AAPL", start="2024-01-02", end="2024-01-03",
+            method="log", client=fake,
         )
-        assert not rets.empty
+        assert rets.iloc[-1]["AAPL"] == pytest.approx(np.log(110.0 / 100.0))
 
 
-class TestGetVolumeParquet:
-    @requires_stocks
+# ── get_volume (mocked REST) ────────────────────────────────────────
+
+
+class TestGetVolumeRest:
     def test_basic_volume(self) -> None:
+        fake = MagicMock()
+        fake.rest.get_aggregates.side_effect = lambda ticker, **kw: [
+            FakeAgg(ts_ms=_ms("2024-01-02"), open=0, high=0, low=0,
+                    close=100.0,
+                    volume=1_000_000 if ticker == "AAPL" else 500_000),
+        ]
         vol = equities.get_volume(
-            ["AAPL", "MSFT"], start="2025-01-01", end="2025-01-10",
-            source="parquet",
+            ["AAPL", "MSFT"], start="2024-01-02", end="2024-01-02",
+            client=fake,
         )
-        assert (vol > 0).all().all()
+        assert vol.loc[pd.Timestamp("2024-01-02"), "AAPL"] == 1_000_000
+        assert vol.loc[pd.Timestamp("2024-01-02"), "MSFT"] == 500_000
+
+
+# ── get_daily_grouped (mocked REST) ─────────────────────────────────
+
+
+class TestGetDailyGrouped:
+    def test_returns_one_row_per_ticker(self) -> None:
+        fake = MagicMock()
+        fake.rest.get_grouped_daily_aggs.return_value = [
+            FakeGroupedAgg("AAPL", 100, 105, 99, 103, 1_000_000, vwap=102.0),
+            FakeGroupedAgg("MSFT", 200, 210, 198, 205, 500_000, vwap=204.0),
+            FakeGroupedAgg("NVDA", 50, 52, 49, 51, 2_000_000, vwap=50.5),
+        ]
+        df = equities.get_daily_grouped("2024-01-03", client=fake)
+        assert len(df) == 3
+        assert set(df["ticker"]) == {"AAPL", "MSFT", "NVDA"}
+        # All rows have the same date
+        assert (df["date"] == pd.Timestamp("2024-01-03")).all()
+        # Schema check
+        for col in ("ticker", "date", "open", "high", "low", "close",
+                    "volume", "vwap", "transactions"):
+            assert col in df.columns
+
+    def test_empty_for_no_results(self) -> None:
+        fake = MagicMock()
+        fake.rest.get_grouped_daily_aggs.return_value = []
+        df = equities.get_daily_grouped("2024-01-06", client=fake)  # weekend
+        assert df.empty
+        # Empty frame still has the schema columns
+        for col in ("ticker", "date", "open", "high", "low", "close",
+                    "volume", "vwap", "transactions"):
+            assert col in df.columns
+
+    def test_ticker_filter_applied_after_pull(self) -> None:
+        fake = MagicMock()
+        fake.rest.get_grouped_daily_aggs.return_value = [
+            FakeGroupedAgg("AAPL", 100, 105, 99, 103, 1_000_000),
+            FakeGroupedAgg("MSFT", 200, 210, 198, 205, 500_000),
+            FakeGroupedAgg("NVDA", 50, 52, 49, 51, 2_000_000),
+        ]
+        df = equities.get_daily_grouped(
+            "2024-01-03", tickers=["AAPL", "MSFT"], client=fake,
+        )
+        assert set(df["ticker"]) == {"AAPL", "MSFT"}
+        # Bulk call still happened — we filter client-side
+        fake.rest.get_grouped_daily_aggs.assert_called_once()
+
+    def test_ticker_filter_normalizes_case(self) -> None:
+        fake = MagicMock()
+        fake.rest.get_grouped_daily_aggs.return_value = [
+            FakeGroupedAgg("AAPL", 100, 100, 100, 100, 1),
+        ]
+        df = equities.get_daily_grouped(
+            "2024-01-03", tickers=["aapl"], client=fake,
+        )
+        assert df.iloc[0]["ticker"] == "AAPL"
+
+    def test_passes_adjusted_and_otc_through(self) -> None:
+        fake = MagicMock()
+        fake.rest.get_grouped_daily_aggs.return_value = []
+        equities.get_daily_grouped(
+            "2024-01-03", adjusted=False, include_otc=True, client=fake,
+        )
+        fake.rest.get_grouped_daily_aggs.assert_called_once_with(
+            "2024-01-03", adjusted=False, include_otc=True,
+        )
 
 
 # ── Snapshot (mocked — no live API) ─────────────────────────────────
+
 
 class FakeSnapshotDay:
     def __init__(self):
@@ -363,6 +526,7 @@ class TestGetSnapshot:
 
 # ── Stub modules raise clearly ──────────────────────────────────────
 
+
 class TestStubsRaiseNotImplemented:
     """When these stop raising, that's the signal to update the tests."""
 
@@ -386,14 +550,39 @@ class TestStubsRaiseNotImplemented:
             equities.get_earnings(["AAPL"])
 
 
-# ── Corporate actions: dividends ────────────────────────────────────
+# ── Corporate actions: dividends (mocked REST) ──────────────────────
+
+
+class FakeDividend:
+    def __init__(self, ticker: str, ex_date: str, cash_amount: float,
+                 pay_date: str | None = None, record_date: str | None = None,
+                 declaration_date: str | None = None,
+                 currency: str = "USD", frequency: int = 4,
+                 dividend_type: str = "CD"):
+        self.ticker = ticker
+        self.ex_dividend_date = ex_date
+        self.pay_date = pay_date
+        self.record_date = record_date
+        self.declaration_date = declaration_date
+        self.cash_amount = cash_amount
+        self.currency = currency
+        self.frequency = frequency
+        self.dividend_type = dividend_type
+
 
 class TestGetDividends:
-    @requires_dividends
-    def test_single_ticker(self) -> None:
-        df = equities.cax.get_dividends("AAPL")
-        assert not df.empty
+    def test_single_ticker_calls_list_dividends_with_ticker(self) -> None:
+        fake = MagicMock()
+        fake.rest.list_dividends.return_value = [
+            FakeDividend("AAPL", "2024-02-09", 0.24),
+            FakeDividend("AAPL", "2024-05-10", 0.24),
+        ]
+        df = equities.cax.get_dividends("AAPL", client=fake)
+        fake.rest.list_dividends.assert_called_once_with(
+            ticker="AAPL", ex_dividend_date_gte=None, ex_dividend_date_lte=None,
+        )
         assert (df["ticker"] == "AAPL").all()
+        assert len(df) == 2
         # Schema columns we expect
         for col in (
             "ticker", "ex_dividend_date", "pay_date", "record_date",
@@ -401,82 +590,138 @@ class TestGetDividends:
             "frequency", "dividend_type",
         ):
             assert col in df.columns
-        # Sorted by ex_dividend_date
-        ex = df["ex_dividend_date"].dropna()
-        assert (ex.diff().dropna() >= pd.Timedelta(0)).all()
 
-    @requires_dividends
-    def test_basket(self) -> None:
-        df = equities.cax.get_dividends(["AAPL", "MSFT"])
-        assert set(df["ticker"].unique()) <= {"AAPL", "MSFT"}
-        assert not df.empty
+    def test_basket_iterates_per_ticker(self) -> None:
+        fake = MagicMock()
+        fake.rest.list_dividends.side_effect = lambda **kw: [
+            FakeDividend(kw["ticker"], "2024-02-09", 0.24),
+        ]
+        df = equities.cax.get_dividends(["AAPL", "MSFT"], client=fake)
+        assert fake.rest.list_dividends.call_count == 2
+        assert set(df["ticker"]) == {"AAPL", "MSFT"}
 
-    @requires_dividends
-    def test_date_range_filters_on_ex_dividend(self) -> None:
-        df = equities.cax.get_dividends(
-            "AAPL", start="2024-01-01", end="2024-12-31"
+    def test_no_tickers_calls_bulk(self) -> None:
+        fake = MagicMock()
+        fake.rest.list_dividends.return_value = [
+            FakeDividend("AAPL", "2024-02-09", 0.24),
+            FakeDividend("MSFT", "2024-02-15", 0.75),
+        ]
+        df = equities.cax.get_dividends(client=fake)
+        fake.rest.list_dividends.assert_called_once_with(
+            ex_dividend_date_gte=None, ex_dividend_date_lte=None,
         )
-        if df.empty:
-            pytest.skip("No AAPL dividends in 2024 in this dataset")
-        assert df["ex_dividend_date"].min() >= pd.Timestamp("2024-01-01")
-        assert df["ex_dividend_date"].max() <= pd.Timestamp("2024-12-31")
+        assert len(df) == 2
 
-    @requires_dividends
-    def test_no_filters_returns_everything(self) -> None:
-        # Just make sure it doesn't blow up; the dataset has ~2M rows.
-        df = equities.cax.get_dividends()
-        assert not df.empty
-        assert len(df) > 1000
+    def test_date_range_passes_through_as_filters(self) -> None:
+        fake = MagicMock()
+        fake.rest.list_dividends.return_value = []
+        equities.cax.get_dividends(
+            "AAPL", start="2024-01-01", end="2024-12-31", client=fake,
+        )
+        fake.rest.list_dividends.assert_called_once_with(
+            ticker="AAPL",
+            ex_dividend_date_gte="2024-01-01",
+            ex_dividend_date_lte="2024-12-31",
+        )
 
-    @requires_dividends
     def test_unknown_ticker_returns_empty(self) -> None:
-        df = equities.cax.get_dividends("NOTAREALTICKER1234")
+        fake = MagicMock()
+        fake.rest.list_dividends.return_value = []
+        df = equities.cax.get_dividends("NOTAREAL", client=fake)
         assert df.empty
+        # Empty frame still has the schema columns
+        for col in (
+            "ticker", "ex_dividend_date", "pay_date", "record_date",
+            "declaration_date", "cash_amount", "currency",
+            "frequency", "dividend_type",
+        ):
+            assert col in df.columns
 
-    @requires_dividends
     def test_ticker_is_normalized_to_uppercase(self) -> None:
-        upper = equities.cax.get_dividends("AAPL")
-        lower = equities.cax.get_dividends("aapl")
-        pd.testing.assert_frame_equal(upper, lower)
+        fake = MagicMock()
+        fake.rest.list_dividends.return_value = []
+        equities.cax.get_dividends("aapl", client=fake)
+        fake.rest.list_dividends.assert_called_once_with(
+            ticker="AAPL", ex_dividend_date_gte=None, ex_dividend_date_lte=None,
+        )
+
+    def test_results_sorted_by_ex_date_then_ticker(self) -> None:
+        fake = MagicMock()
+        fake.rest.list_dividends.return_value = [
+            FakeDividend("MSFT", "2024-05-15", 0.75),
+            FakeDividend("AAPL", "2024-02-09", 0.24),
+            FakeDividend("AAPL", "2024-05-10", 0.24),
+        ]
+        df = equities.cax.get_dividends(client=fake)
+        ex_dates = df["ex_dividend_date"].tolist()
+        assert ex_dates == sorted(ex_dates)
 
 
-# ── Corporate actions: splits ───────────────────────────────────────
+# ── Corporate actions: splits (mocked REST) ─────────────────────────
+
+
+class FakeSplit:
+    def __init__(self, ticker: str, exec_date: str,
+                 split_from: int, split_to: int):
+        self.ticker = ticker
+        self.execution_date = exec_date
+        self.split_from = split_from
+        self.split_to = split_to
+
 
 class TestGetSplits:
-    @requires_splits
     def test_single_ticker(self) -> None:
-        df = equities.cax.get_splits("AAPL")
-        assert not df.empty
+        fake = MagicMock()
+        fake.rest.list_splits.return_value = [
+            FakeSplit("AAPL", "2020-08-31", 1, 4),
+        ]
+        df = equities.cax.get_splits("AAPL", client=fake)
+        fake.rest.list_splits.assert_called_once_with(
+            ticker="AAPL", execution_date_gte=None, execution_date_lte=None,
+        )
         assert (df["ticker"] == "AAPL").all()
         for col in ("ticker", "execution_date", "split_from", "split_to"):
             assert col in df.columns
 
-    @requires_splits
     def test_basket(self) -> None:
-        df = equities.cax.get_splits(["AAPL", "TSLA", "NVDA"])
-        assert set(df["ticker"].unique()) <= {"AAPL", "TSLA", "NVDA"}
+        fake = MagicMock()
+        fake.rest.list_splits.side_effect = lambda **kw: [
+            FakeSplit(kw["ticker"], "2020-08-31", 1, 4),
+        ]
+        df = equities.cax.get_splits(["AAPL", "TSLA"], client=fake)
+        assert fake.rest.list_splits.call_count == 2
+        assert set(df["ticker"]) == {"AAPL", "TSLA"}
 
-    @requires_splits
-    def test_date_range_filters_on_execution_date(self) -> None:
-        df = equities.cax.get_splits(
-            start="2020-01-01", end="2020-12-31"
+    def test_date_range_passes_through(self) -> None:
+        fake = MagicMock()
+        fake.rest.list_splits.return_value = []
+        equities.cax.get_splits(
+            start="2020-01-01", end="2020-12-31", client=fake,
         )
-        if not df.empty:
-            assert df["execution_date"].min() >= pd.Timestamp("2020-01-01")
-            assert df["execution_date"].max() <= pd.Timestamp("2020-12-31")
+        fake.rest.list_splits.assert_called_once_with(
+            execution_date_gte="2020-01-01",
+            execution_date_lte="2020-12-31",
+        )
 
-    @requires_splits
     def test_aapl_4_for_1_in_2020(self) -> None:
-        """Sanity check the dataset: AAPL had a 4:1 split on 2020-08-31."""
-        df = equities.cax.get_splits("AAPL", start="2020-01-01", end="2020-12-31")
+        """The classic AAPL 4:1 split — sanity-check shape."""
+        fake = MagicMock()
+        fake.rest.list_splits.return_value = [
+            FakeSplit("AAPL", "2020-08-31", 1, 4),
+        ]
+        df = equities.cax.get_splits(
+            "AAPL", start="2020-01-01", end="2020-12-31", client=fake,
+        )
         assert not df.empty
-        row = df[df["execution_date"] == pd.Timestamp("2020-08-31")]
-        assert not row.empty
-        assert int(row.iloc[0]["split_from"]) == 1
-        assert int(row.iloc[0]["split_to"]) == 4
+        row = df.iloc[0]
+        assert row["execution_date"] == pd.Timestamp("2020-08-31")
+        assert int(row["split_from"]) == 1
+        assert int(row["split_to"]) == 4
 
-    @requires_splits
     def test_unknown_ticker_returns_empty(self) -> None:
-        df = equities.cax.get_splits("NOTAREALTICKER1234")
+        fake = MagicMock()
+        fake.rest.list_splits.return_value = []
+        df = equities.cax.get_splits("NOTAREAL", client=fake)
         assert df.empty
-
+        for col in ("ticker", "execution_date", "split_from", "split_to"):
+            assert col in df.columns

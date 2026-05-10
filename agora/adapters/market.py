@@ -4,8 +4,7 @@ This module exists only so older imports of
 ``agora.adapters.market.get_prices`` / ``get_returns`` keep working.
 All real implementation now lives in :mod:`agora.equities.market` —
 ``get_daily_prices``, ``get_daily_returns``, ``get_volume``,
-``get_snapshot`` — with a richer API (Parquet-or-REST source toggle,
-``fields=``, structured ``failed_tickers``, etc.).
+``get_snapshot``, ``get_daily_grouped``.
 
 Migration::
 
@@ -16,17 +15,19 @@ Migration::
 
     # New (preferred)
     from agora import equities
-    prices  = equities.get_daily_prices(["AAPL"], period="1y", source="rest")
-    returns = equities.get_daily_returns(["AAPL"], period="1y", source="rest")
+    prices  = equities.get_daily_prices(["AAPL"], period="1y")
+    returns = equities.get_daily_returns(["AAPL"], period="1y")
 
 Kwarg translation handled by this shim:
 
 - ``adjust``  → ``adjusted``
 - ``ohlcv=True`` → ``fields=("open", "high", "low", "close", "volume")``
 
-The shim always uses ``source="rest"`` because that is what the original
-adapter implementation did. If you want the local Parquet fast path,
-call :func:`agora.equities.get_daily_prices` directly.
+``agora.equities`` is now API-only (the prior ``source="parquet"`` /
+``source="rest"`` toggle was removed). Downstream packages that need
+local Parquet caching should layer their own cache on top — for read-
+only access, :class:`agora.loaders.parquet.FlatFileLoader` is still
+available.
 """
 
 from __future__ import annotations
@@ -89,7 +90,6 @@ def get_prices(
         period=period,
         fields=fields,
         adjusted=adjust,
-        source="rest",
         fill=fill,
         calendar=calendar,
         strict=strict,
@@ -119,7 +119,6 @@ def get_returns(
         period=period,
         method=method,
         adjusted=adjust,
-        source="rest",
         fill=fill,
         calendar=calendar,
         strict=strict,

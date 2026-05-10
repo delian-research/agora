@@ -258,6 +258,127 @@ class MassiveDataApi:
         logger.debug("Fetching all ticker snapshots")
         return list(self._client.get_snapshot_all("stocks"))
 
+    @retry_with_backoff()
+    def list_dividends(
+        self,
+        ticker: str | None = None,
+        *,
+        ex_dividend_date_gte: str | None = None,
+        ex_dividend_date_lte: str | None = None,
+        limit: int = 1000,
+    ) -> list:
+        """
+        List dividend events with optional ticker / date-range filters.
+
+        The SDK auto-paginates; the returned list contains every record
+        the cursor walks through.
+
+        Args:
+            ticker: Single ticker symbol. ``None`` returns all dividends.
+            ex_dividend_date_gte: Earliest ex-dividend date (YYYY-MM-DD).
+            ex_dividend_date_lte: Latest ex-dividend date (YYYY-MM-DD).
+            limit: Per-page limit (cursor handles total result size).
+
+        Returns:
+            List of dividend objects with attributes ``ticker``,
+            ``ex_dividend_date``, ``pay_date``, ``record_date``,
+            ``declaration_date``, ``cash_amount``, ``currency``,
+            ``frequency``, ``dividend_type``.
+
+        Raises:
+            MassiveAPIError: If request fails after retries.
+        """
+        logger.debug(
+            "Fetching dividends: ticker=%s ex_div=[%s, %s]",
+            ticker, ex_dividend_date_gte, ex_dividend_date_lte,
+        )
+        kwargs: dict = {"limit": limit}
+        if ticker is not None:
+            kwargs["ticker"] = ticker
+        if ex_dividend_date_gte is not None:
+            kwargs["ex_dividend_date_gte"] = ex_dividend_date_gte
+        if ex_dividend_date_lte is not None:
+            kwargs["ex_dividend_date_lte"] = ex_dividend_date_lte
+        return list(self._client.list_dividends(**kwargs))
+
+    @retry_with_backoff()
+    def list_splits(
+        self,
+        ticker: str | None = None,
+        *,
+        execution_date_gte: str | None = None,
+        execution_date_lte: str | None = None,
+        limit: int = 1000,
+    ) -> list:
+        """
+        List stock split events with optional ticker / date-range filters.
+
+        Args:
+            ticker: Single ticker symbol. ``None`` returns all splits.
+            execution_date_gte: Earliest execution date (YYYY-MM-DD).
+            execution_date_lte: Latest execution date (YYYY-MM-DD).
+            limit: Per-page limit (cursor handles total result size).
+
+        Returns:
+            List of split objects with attributes ``ticker``,
+            ``execution_date``, ``split_from``, ``split_to``.
+
+        Raises:
+            MassiveAPIError: If request fails after retries.
+        """
+        logger.debug(
+            "Fetching splits: ticker=%s exec=[%s, %s]",
+            ticker, execution_date_gte, execution_date_lte,
+        )
+        kwargs: dict = {"limit": limit}
+        if ticker is not None:
+            kwargs["ticker"] = ticker
+        if execution_date_gte is not None:
+            kwargs["execution_date_gte"] = execution_date_gte
+        if execution_date_lte is not None:
+            kwargs["execution_date_lte"] = execution_date_lte
+        return list(self._client.list_splits(**kwargs))
+
+    @retry_with_backoff()
+    def get_grouped_daily_aggs(
+        self,
+        date: str,
+        *,
+        adjusted: bool = True,
+        include_otc: bool = False,
+    ) -> list:
+        """
+        Get all-tickers cross-section of daily OHLCV for one date.
+
+        One API call returns ~10K bar objects (every active stock that
+        traded on ``date``). Dramatically faster than per-ticker
+        :meth:`get_aggregates` when you need a wide universe over a
+        small date window.
+
+        Args:
+            date: Trading date (YYYY-MM-DD). Returns 0 results for
+                weekends / holidays.
+            adjusted: Whether prices are split-adjusted.
+            include_otc: Whether to include OTC securities.
+
+        Returns:
+            List of bar objects with attributes ``ticker``, ``open``,
+            ``high``, ``low``, ``close``, ``volume``, ``vwap``,
+            ``transactions``, ``timestamp``.
+
+        Raises:
+            MassiveAPIError: If request fails after retries.
+        """
+        logger.debug(
+            "Fetching grouped daily aggs: date=%s adjusted=%s otc=%s",
+            date, adjusted, include_otc,
+        )
+        return list(self._client.get_grouped_daily_aggs(
+            date,
+            adjusted=adjusted,
+            include_otc=include_otc,
+        ))
+
     def close(self):
         """Close the client connection."""
         # The REST client doesn't need explicit closing, but this is here

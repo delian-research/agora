@@ -3,8 +3,8 @@
 The shim translates legacy kwargs (``adjust`` → ``adjusted``,
 ``ohlcv=True`` → ``fields=(...)``) and forwards to
 :func:`agora.equities.market.get_daily_prices` /
-:func:`agora.equities.market.get_daily_returns` with ``source="rest"``.
-Each call must emit ``DeprecationWarning``.
+:func:`agora.equities.market.get_daily_returns`. Each call must emit
+``DeprecationWarning``.
 """
 
 from __future__ import annotations
@@ -106,7 +106,7 @@ class TestKwargTranslation:
 
 class TestParityWithEquities:
     """Spot-check that the shim produces equivalent close-price data
-    to a direct equities call with ``source="rest"``."""
+    to a direct equities call."""
 
     def test_close_price_parity(self) -> None:
         # Same fake agg returned to both paths.
@@ -121,7 +121,7 @@ class TestParityWithEquities:
         from agora import equities
         via_equities = equities.get_daily_prices(
             ["AAPL"], start="2025-01-01", end="2025-01-02",
-            source="rest", client=fake2,
+            client=fake2,
         )
 
         pd.testing.assert_frame_equal(via_shim, via_equities)
