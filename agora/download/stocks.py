@@ -1,5 +1,7 @@
 """Download US stock daily OHLCV from S3 flat files → yearly Parquet."""
 
+from __future__ import annotations
+
 import gzip
 import io
 import logging
@@ -10,6 +12,8 @@ from botocore.exceptions import ClientError
 
 from .checkpoint import Checkpoint
 from .config import DATA_DIR, S3_BUCKET, get_s3_client
+from .metrics import download_metrics
+from .result import DownloadResult
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +49,7 @@ def download_stocks(
     start_year: int = 2021,
     end_year: int = 2026,
     resume: bool = True,
-) -> Path:
+) -> DownloadResult:
     """Download stock daily OHLCV flat files and save as yearly Parquet.
 
     Args:
@@ -55,95 +59,84 @@ def download_stocks(
         resume: If True, skip files already downloaded (checkpoint-based).
 
     Returns:
-        Path to the output directory containing yearly Parquet files.
+        :class:`DownloadResult` with row/file/byte counts, timing, and the
+        list of years that failed (if any). ``result.output_dir`` is the
+        directory containing yearly Parquet files.
     """
     output_dir = output_dir or DATA_DIR / "stocks" / "daily"
     output_dir.mkdir(parents=True, exist_ok=True)
 
     checkpoint = Checkpoint(output_dir / ".checkpoint.json")
     s3 = get_s3_client()
-
-    years_completed: list[int] = []
-    years_skipped: list[int] = []
-    years_empty: list[int] = []
-
-    for year in range(start_year, end_year + 1):
-        parquet_path = output_dir / f"{year}.parquet"
-
-        # Skip if this year is already fully downloaded
-        year_key = f"year:{year}"
-        if resume and checkpoint.is_done(year_key):
-            logger.info(f"Skipping {year} (already complete)")
-            years_skipped.append(year)
-            continue
-
-        logger.info(f"Downloading {year}...")
-        files = _list_available_files(s3, year)
-
-        if not files:
-            logger.warning(f"No files found for {year}")
-            years_empty.append(year)
-            continue
-
-        year_frames = []
-        downloaded = 0
-        skipped = 0
-
-        for file_info in files:
-            key = file_info["key"]
-
-            try:
-                df = _download_and_parse(s3, key)
-                year_frames.append(df)
-                downloaded += 1
-
-                if downloaded % 50 == 0:
-                    logger.info(f"  {year}: {downloaded}/{len(files)} files downloaded")
-
-            except ClientError as e:
-                if e.response["Error"]["Code"] == "403":
-                    skipped += 1
-                    continue
-                raise
-
-        if not year_frames:
-            logger.warning(f"No accessible data for {year} (skipped {skipped} files)")
-            years_empty.append(year)
-            continue
-
-        # Combine all days for this year into a single DataFrame
-        combined = pd.concat(year_frames, ignore_index=True)
-
-        # Clean up and optimize dtypes
-        combined = combined.rename(columns={"transactions": "trades"})
-        combined["date"] = pd.to_datetime(combined["date"])
-        combined = combined[["date", "ticker", "open", "high", "low", "close", "volume", "trades"]].copy()
-        combined = combined.sort_values(["date", "ticker"]).reset_index(drop=True)
-
-        # Write Parquet
-        combined.to_parquet(parquet_path, index=False, engine="pyarrow")
-
-        size_mb = parquet_path.stat().st_size / (1024 * 1024)
-        logger.info(
-            f"  {year}: Wrote {parquet_path.name} "
-            f"({len(combined)} rows, {combined['ticker'].nunique()} tickers, "
-            f"{downloaded} days, {size_mb:.1f} MB)"
-        )
-
-        checkpoint.mark_done(year_key)
-        years_completed.append(year)
-
     requested = list(range(start_year, end_year + 1))
-    logger.info(
-        "download_stocks summary: requested=%d, downloaded=%d, skipped=%d, empty=%d",
-        len(requested), len(years_completed), len(years_skipped), len(years_empty),
-        extra={
-            "stage": "download_stocks.summary",
-            "requested": requested,
-            "downloaded": years_completed,
-            "skipped": years_skipped,
-            "empty": years_empty,
-        },
-    )
 
-    return output_dir
+    with download_metrics(
+        "download_stocks",
+        output_dir=output_dir,
+        checkpoint_path=checkpoint._path,
+    ) as m:
+        m.requested = len(requested)
+
+        for year in requested:
+            parquet_path = output_dir / f"{year}.parquet"
+            year_key = f"year:{year}"
+
+            if resume and checkpoint.is_done(year_key):
+                logger.info(f"Skipping {year} (already complete)")
+                m.skipped += 1
+                continue
+
+            logger.info(f"Downloading {year}...")
+            files = _list_available_files(s3, year)
+
+            if not files:
+                logger.warning(f"No files found for {year}")
+                m.failed.append(str(year))
+                continue
+
+            year_frames = []
+            downloaded = 0
+            skipped_files = 0
+
+            for file_info in files:
+                key = file_info["key"]
+                try:
+                    df = _download_and_parse(s3, key)
+                    year_frames.append(df)
+                    downloaded += 1
+                    if downloaded % 50 == 0:
+                        logger.info(f"  {year}: {downloaded}/{len(files)} files downloaded")
+                except ClientError as e:
+                    if e.response["Error"]["Code"] == "403":
+                        skipped_files += 1
+                        continue
+                    raise
+
+            if not year_frames:
+                logger.warning(f"No accessible data for {year} (skipped {skipped_files} files)")
+                m.failed.append(str(year))
+                continue
+
+            # Combine all days for this year into a single DataFrame
+            combined = pd.concat(year_frames, ignore_index=True)
+            combined = combined.rename(columns={"transactions": "trades"})
+            combined["date"] = pd.to_datetime(combined["date"])
+            combined = combined[["date", "ticker", "open", "high", "low", "close", "volume", "trades"]].copy()
+            combined = combined.sort_values(["date", "ticker"]).reset_index(drop=True)
+            combined.to_parquet(parquet_path, index=False, engine="pyarrow")
+
+            file_bytes = parquet_path.stat().st_size
+            size_mb = file_bytes / (1024 * 1024)
+            logger.info(
+                f"  {year}: Wrote {parquet_path.name} "
+                f"({len(combined)} rows, {combined['ticker'].nunique()} tickers, "
+                f"{downloaded} days, {size_mb:.1f} MB)"
+            )
+
+            m.rows_written += len(combined)
+            m.files_written += 1
+            m.bytes_written += file_bytes
+            m.completed += 1
+            checkpoint.mark_done(year_key)
+
+    return m.result

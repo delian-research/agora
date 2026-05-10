@@ -65,9 +65,9 @@ jobs:
 
       - name: Type-check (mypy, curated subset)
         # The curated subset matches pyproject.toml's mypy config target.
-        # Broaden to the whole package in a follow-up PR once download/
-        # and normalize/ are typed.
-        run: uv run mypy agora/equities agora/loaders agora/client.py agora/config.py agora/errors.py
+        # Broaden to the whole package in a follow-up PR once the rest of
+        # download/ and normalize/ are typed.
+        run: uv run mypy agora/equities agora/loaders agora/client.py agora/config.py agora/errors.py agora/download/result.py agora/download/metrics.py
 
       - name: Run pytest with coverage
         # Coverage floor is the current CI baseline. Local baseline is
