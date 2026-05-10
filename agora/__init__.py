@@ -2,6 +2,11 @@
 
 Public API (everything below is importable as ``from agora import X``):
 
+    Asset-class facades (recommended)
+    ---------------------------------
+    - :mod:`agora.equities` — domain-flavored helpers for equity prices,
+      returns, volume, dividends, splits, snapshots. See ``dovs/d.equities.md``.
+
     Client / Config
     ---------------
     - :class:`MassiveClient` — orchestrator bundling REST / Parquet / WebSocket
@@ -14,34 +19,32 @@ Public API (everything below is importable as ``from agora import X``):
     - :class:`FlatFileLoader` — read-only local Parquet access
     - :class:`WebSocketStreamer` — live trades/quotes/aggregates streaming
 
-    Adapters
-    --------
-    - :func:`get_prices` — pivoted OHLC matrix for a basket
-    - :func:`get_returns` — daily returns for a basket
-
     Bulk download
     -------------
     - :func:`download_stocks`, :func:`download_forex`,
       :func:`download_reference`, :func:`download_ticker_events`
+
+    Adapters (deprecated — use ``agora.equities`` instead)
+    ------------------------------------------------------
+    - :func:`get_prices`, :func:`get_returns` — thin shims that emit
+      ``DeprecationWarning`` and forward to ``agora.equities`` calls.
 
     Errors
     ------
     - :class:`MassiveAPIError` and subclasses
 
 Examples:
-    >>> from agora import MassiveClient, FlatFileLoader, get_prices
+    >>> from agora import equities, MassiveClient, FlatFileLoader
     >>>
-    >>> # Live REST + offline Parquet via one client
+    >>> # Recommended path: agora.equities
+    >>> prices  = equities.get_daily_prices(["AAPL", "MSFT"], period="1y")
+    >>> returns = equities.get_daily_returns(["SPY"], period="2y", method="log")
+    >>> snap    = equities.get_snapshot(["AAPL", "MSFT", "NVDA"])
+    >>>
+    >>> # Lower-level: live REST + offline Parquet via one client
     >>> with MassiveClient.from_env() as c:
     ...     aggs   = c.rest.get_aggregates("AAPL", 1, "day", "2024-01-01", "2024-12-31")
-    ...     prices = c.flat_files().get_prices(["AAPL", "MSFT"], start="2024-01-01")
-    >>>
-    >>> # Or use loaders directly
-    >>> loader = FlatFileLoader()
-    >>> prices = loader.get_prices(["SPY"], start="2024-01-01")
-    >>>
-    >>> # Or use the high-level adapter
-    >>> prices = get_prices(["AAPL", "MSFT"], period="1y")
+    ...     parquet = c.flat_files().get_stock_daily(["AAPL", "MSFT"], start="2024-01-01")
 """
 
 __version__ = "0.1.0"

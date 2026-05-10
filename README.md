@@ -178,14 +178,15 @@ streamer.run(timeout=60)   # auto-stop after 60s; or omit for Ctrl+C
 
 | Module | Purpose |
 |---|---|
+| `agora.equities` | **Recommended user-facing API** — domain helpers for prices, returns, volume, dividends, splits, snapshots. See `dovs/d.equities.md`. |
 | `agora.client.MassiveClient` | Orchestrator — `from_env()` builds a config-bound client with `.rest`, `.flat_files()`, `.ws_streamer()` |
 | `agora.config.MassiveConfig` | Env-loaded config (`MASSIVE_API_KEY`, base URL, timeout, retries) |
 | `agora.loaders.rest.MassiveDataApi` | Live REST wrapper with retry/backoff |
 | `agora.loaders.parquet.FlatFileLoader` | Read-only local Parquet access |
 | `agora.loaders.socket.WebSocketStreamer` | Live trades/quotes/aggregates with verb-based subscribe API |
-| `agora.adapters.market` | High-level analytics helpers (`get_prices`, `get_returns`) |
-| `agora.normalize` | Payload → DataFrame transforms (used by older REST flows) |
 | `agora.download` | Bulk download CLI + library |
+| `agora.normalize` | Payload → DataFrame transforms (used by older REST flows) |
+| `agora.adapters.market` | **Deprecated.** Thin shims (`get_prices`, `get_returns`) that emit `DeprecationWarning` and forward to `agora.equities`. Use the equities namespace directly in new code. |
 
 ## Subscription tier notes
 

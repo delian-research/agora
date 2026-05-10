@@ -12,28 +12,36 @@
   ├── AGENTS.md                                 Working architecture doc
   │
   ├── agora/                                    Source package
-  │   ├── __init__.py                           EMPTY
+  │   ├── __init__.py                           Public exports
   │   ├── config.py                             MassiveConfig dataclass + from_env()
-  │   ├── client.py                             MassiveClient high-level entry — BROKEN
+  │   ├── client.py                             MassiveClient orchestrator
   │   ├── errors.py                             Exception hierarchy
-  │   ├── models.py                             EMPTY (planned Pydantic models)
+  │   ├── py.typed                              PEP 561 marker (consumers read type hints)
+  │   ├── models.py                             EMPTY (placeholder; safe to delete)
+  │   │
+  │   ├── equities/                             Recommended user-facing API
+  │   │   ├── market.py                         get_daily_prices/returns/volume/snapshot
+  │   │   ├── reference.py                      Stubs (NotImplementedError)
+  │   │   ├── cax/                              Corporate actions (dividends, splits)
+  │   │   └── company/                          Stubs (NotImplementedError; Benzinga-gated)
   │   │
   │   ├── loaders/                              Data access layer
-  │   │   ├── rest.py                           MassiveDataApi (retry wrapper) — BROKEN
-  │   │   ├── s3.py                             FlatFileLoader (Parquet reader) — WORKS
-  │   │   └── socket.py                         EMPTY (websocket placeholder)
+  │   │   ├── rest.py                           MassiveDataApi (retry wrapper)
+  │   │   ├── parquet.py                        FlatFileLoader (Parquet reader)
+  │   │   ├── s3.py                             Deprecation shim → parquet.py
+  │   │   └── socket.py                         WebSocketStreamer
   │   │
   │   ├── adapters/
-  │   │   └── market.py                         get_prices/get_returns helpers — BROKEN
+  │   │   └── market.py                         Deprecation shim → equities.market
   │   │
   │   ├── normalize/                            Payload → DataFrame transforms
-  │   │   ├── __init__.py                       Re-exports — FAILS due to children
-  │   │   ├── base.py                           snake_case + epoch inference — works
-  │   │   ├── ohlc.py                           OHLC payload normalize — works in isolation
-  │   │   ├── snapshot.py                       Snapshot payload — BROKEN IMPORT
-  │   │   └── corporate_actions.py              Splits/divs payload — BROKEN IMPORT
+  │   │   ├── __init__.py                       Re-exports
+  │   │   ├── base.py                           snake_case + epoch inference
+  │   │   ├── ohlc.py                           OHLC payload normalize
+  │   │   ├── snapshot.py                       Snapshot payload
+  │   │   └── corporate_actions.py              Splits/divs payload
   │   │
-  │   └── download/                             Bulk ingestion pipeline — ALL WORKING
+  │   └── download/                             Bulk ingestion pipeline
   │       ├── __init__.py                       Public exports (incomplete)
   │       ├── __main__.py                       python -m agora.download
   │       ├── cli.py                            argparse commands
@@ -86,7 +94,15 @@
   ├──────────────────────────────────────┼────────────────────────────────┼────────────────────────┼───────────┤
   │ agora/loaders/socket.py              │ WebSocketStreamer              │ Working                │ 425       │
   ├──────────────────────────────────────┼────────────────────────────────┼────────────────────────┼───────────┤
-  │ agora/adapters/market.py             │ get_prices/get_returns helpers │ Working                │ 196       │
+  │ agora/adapters/market.py             │ Deprecation shim → equities    │ Working (warns)        │ 130       │
+  ├──────────────────────────────────────┼────────────────────────────────┼────────────────────────┼───────────┤
+  │ agora/equities/market.py             │ Domain prices/returns/snapshot │ Working                │ ~510      │
+  ├──────────────────────────────────────┼────────────────────────────────┼────────────────────────┼───────────┤
+  │ agora/equities/cax/*                 │ Dividends + splits wrappers    │ Working                │ ~110      │
+  ├──────────────────────────────────────┼────────────────────────────────┼────────────────────────┼───────────┤
+  │ agora/equities/reference.py          │ Stubs (exchange/currency/...)  │ NotImplementedError    │ ~80       │
+  ├──────────────────────────────────────┼────────────────────────────────┼────────────────────────┼───────────┤
+  │ agora/equities/company/*             │ Stubs (industry/earnings/news) │ NotImplementedError    │ ~80       │
   ├──────────────────────────────────────┼────────────────────────────────┼────────────────────────┼───────────┤
   │ agora/normalize/__init__.py          │ Re-exports                     │ Working                │ 28        │
   ├──────────────────────────────────────┼────────────────────────────────┼────────────────────────┼───────────┤
