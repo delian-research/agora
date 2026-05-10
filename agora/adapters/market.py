@@ -1,3 +1,4 @@
+import logging
 from collections.abc import Iterable
 from datetime import UTC, datetime, timedelta
 from typing import Literal
@@ -8,6 +9,8 @@ import pandas as pd
 from agora.client import MassiveClient
 from agora.client import get_client as _get_client
 from agora.errors import MassiveAPIError
+
+logger = logging.getLogger(__name__)
 
 _client: MassiveClient|None = None
 
@@ -80,6 +83,7 @@ def get_prices(
     fill: bool = False,
     ohlcv: bool = False,
     calendar: CalendarMode = "union",
+    strict: bool = False,
     client: MassiveClient | None = None,
 ) -> pd.DataFrame:
     """Fetch daily prices for one or more tickers.
@@ -87,6 +91,12 @@ def get_prices(
     Returns a date-indexed DataFrame. By default returns Close prices
     with one column per ticker. Set ``ohlcv=True`` for MultiIndex
     columns ``(field, ticker)``.
+
+    Args:
+        strict: When ``True``, the first per-ticker API failure raises
+            and the call aborts. When ``False`` (default), failures are
+            logged with structured ``extra`` data and the failing tickers
+            are exposed via ``df.attrs["failed_tickers"]``.
 
     Examples::
 
@@ -106,6 +116,7 @@ def get_prices(
     c = client or _get_client()
 
     per_ticker: dict[str, pd.DataFrame] = {}
+    failed: list[str] = []
     for ticker in tickers_list:
         try:
             aggs = c.rest.get_aggregates(
@@ -116,7 +127,15 @@ def get_prices(
                 to_date=end_date,
                 adjusted=adjust,
             )
-        except MassiveAPIError:
+        except MassiveAPIError as e:
+            if strict:
+                raise
+            logger.warning(
+                "REST aggregates for %s failed: %s",
+                ticker, e,
+                extra={"ticker": ticker, "error": type(e).__name__, "stage": "get_aggregates"},
+            )
+            failed.append(ticker)
             continue
 
         if not aggs:
@@ -142,10 +161,14 @@ def get_prices(
         per_ticker[ticker] = df
 
     if not per_ticker:
-        return pd.DataFrame()
+        empty = pd.DataFrame()
+        if failed:
+            empty.attrs["failed_tickers"] = failed
+        return empty
 
     master_idx = _align_index(per_ticker, calendar)
 
+    surviving = [t for t in tickers_list if t in per_ticker]
     if ohlcv:
         combined = pd.concat(per_ticker, axis=1)
         combined.columns = combined.columns.swaplevel(0, 1)
@@ -155,13 +178,16 @@ def get_prices(
         combined = pd.DataFrame(
             {t: df["Close"] for t, df in per_ticker.items()}
         )
-        combined = combined.reindex(columns=tickers_list)
+        combined = combined.reindex(columns=surviving)
         combined = combined.reindex(index=master_idx)
 
     combined = combined.dropna(how="all").sort_index()
 
     if fill:
         combined = combined.ffill()
+
+    if failed:
+        combined.attrs["failed_tickers"] = failed
 
     return combined
 
@@ -175,6 +201,7 @@ def get_returns(
     method: ReturnMethod = "simple",
     adjust: bool = True,
     fill: bool = True,
+    strict: bool = False,
     client: MassiveClient | None = None,
 ) -> pd.DataFrame:
     """Compute daily returns for one or more tickers.
@@ -195,11 +222,15 @@ def get_returns(
         period=period,
         adjust=adjust,
         fill=fill,
+        strict=strict,
         client=client,
     )
 
     if prices.empty:
-        return pd.DataFrame()
+        empty = pd.DataFrame()
+        if "failed_tickers" in prices.attrs:
+            empty.attrs["failed_tickers"] = prices.attrs["failed_tickers"]
+        return empty
 
     if method == "simple":
         returns = prices.pct_change()
@@ -208,4 +239,7 @@ def get_returns(
     else:
         raise ValueError("method must be 'simple' or 'log'")
 
-    return returns.dropna(how="all")
+    result = returns.dropna(how="all")
+    if "failed_tickers" in prices.attrs:
+        result.attrs["failed_tickers"] = prices.attrs["failed_tickers"]
+    return result
