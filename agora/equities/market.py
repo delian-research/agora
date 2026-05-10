@@ -540,6 +540,218 @@ def get_daily_grouped(
     return df.sort_values("ticker").reset_index(drop=True)
 
 
+def _attrs_to_dict(record, *, skip: tuple[str, ...] = ()) -> dict:
+    """Extract every non-private, non-callable attribute from an SDK record.
+
+    Generic flattener used for endpoints whose response objects carry many
+    fields (live trades/quotes, financial statements, ETF analytics).
+    Avoids enumerating every field per helper, so wrappers stay stable as
+    Polygon adds new fields.
+    """
+    out: dict = {}
+    for name in dir(record):
+        if name.startswith("_") or name in skip:
+            continue
+        try:
+            value = getattr(record, name)
+        except Exception:  # noqa: BLE001 - some SDK fields are properties that raise
+            continue
+        if callable(value):
+            continue
+        out[name] = value
+    return out
+
+
+def get_market_status(*, client: MassiveClient | None = None) -> pd.Series:
+    """Current open/closed status across exchanges, currencies, and markets.
+
+    Wraps Polygon's market-status endpoint. Returns a flat Series indexed
+    by attribute name (``server_time``, ``after_hours``, ``early_hours``,
+    ``market``, plus exchange/currency sub-statuses).
+
+    Returns:
+        Series with at least ``after_hours``, ``early_hours``, ``market``,
+        ``server_time``. Nested ``exchanges`` / ``currencies`` /
+        ``indicesGroups`` objects are kept as-is — pull sub-fields via
+        attribute access.
+
+    Examples:
+        >>> from agora import equities
+        >>> s = equities.get_market_status()
+        >>> s["market"]      # 'open' / 'closed' / 'extended-hours'
+        >>> s["server_time"]
+    """
+    c = client or get_client()
+    record = c.rest.get_market_status()
+    if record is None:
+        return pd.Series(dtype="object")
+    return pd.Series(_attrs_to_dict(record))
+
+
+def get_market_holidays(*, client: MassiveClient | None = None) -> pd.DataFrame:
+    """Upcoming market holidays.
+
+    Wraps Polygon's market-holidays endpoint. Returns one row per
+    (exchange, holiday) with columns: ``date``, ``name``, ``exchange``,
+    ``status`` (``"closed"`` / ``"early-close"``), ``open``, ``close``.
+
+    Examples:
+        >>> from agora import equities
+        >>> equities.get_market_holidays()
+        # date         name                   exchange  status  open  close
+        # 2024-12-25   Christmas              NASDAQ    closed  ...   ...
+    """
+    c = client or get_client()
+    records = c.rest.get_market_holidays()
+    if not records:
+        return pd.DataFrame(
+            columns=["date", "name", "exchange", "status", "open", "close"]
+        )
+    rows = [_attrs_to_dict(r) for r in records]
+    df = pd.DataFrame(rows)
+    if "date" in df.columns:
+        df["date"] = pd.to_datetime(df["date"], errors="coerce")
+    return df
+
+
+def get_last_trade(
+    ticker: str,
+    *,
+    client: MassiveClient | None = None,
+) -> pd.Series:
+    """Most recent trade for ``ticker``.
+
+    Wraps Polygon's last-trade endpoint. Returns a flat Series with the
+    trade's price/size/exchange/conditions/timestamp fields.
+
+    Args:
+        ticker: A single ticker symbol.
+        client: Override the live REST client.
+
+    Returns:
+        Series with at least ``ticker``, ``price``, ``size``,
+        ``exchange``, ``conditions``, ``sip_timestamp``,
+        ``participant_timestamp``, ``trf_timestamp``, ``id``,
+        ``sequence_number``, ``tape``, ``correction``,
+        ``fractional_size``. ``sip_timestamp_utc`` is added when the
+        nanosecond timestamp is present.
+
+    Examples:
+        >>> from agora import equities
+        >>> trade = equities.get_last_trade("AAPL")
+        >>> trade["price"], trade["size"]
+    """
+    if not ticker or not isinstance(ticker, str):
+        raise ValueError("ticker must be a non-empty string")
+    c = client or get_client()
+    record = c.rest.get_last_trade(ticker.strip().upper())
+    if record is None:
+        return pd.Series(dtype="object")
+    s = pd.Series(_attrs_to_dict(record))
+    # Surface the SIP timestamp as UTC for ergonomic use.
+    sip_ns = s.get("sip_timestamp")
+    if sip_ns is not None and not pd.isna(sip_ns):
+        s["sip_timestamp_utc"] = pd.to_datetime(sip_ns, unit="ns", utc=True)
+    return s
+
+
+def get_last_quote(
+    ticker: str,
+    *,
+    client: MassiveClient | None = None,
+) -> pd.Series:
+    """Most recent NBBO quote for ``ticker``.
+
+    Wraps Polygon's last-NBBO endpoint. Returns a flat Series with the
+    quote's bid/ask price+size+exchange, conditions, and timestamps.
+
+    Args:
+        ticker: A single ticker symbol.
+        client: Override the live REST client.
+
+    Returns:
+        Series with at least ``ticker``, ``bid_price``, ``bid_size``,
+        ``bid_exchange``, ``ask_price``, ``ask_size``, ``ask_exchange``,
+        ``conditions``, ``indicators``, ``sip_timestamp``,
+        ``participant_timestamp``, ``trf_timestamp``,
+        ``sequence_number``, ``tape``. ``sip_timestamp_utc`` is added
+        when the nanosecond timestamp is present.
+
+    Examples:
+        >>> from agora import equities
+        >>> q = equities.get_last_quote("AAPL")
+        >>> q["bid_price"], q["ask_price"]
+    """
+    if not ticker or not isinstance(ticker, str):
+        raise ValueError("ticker must be a non-empty string")
+    c = client or get_client()
+    record = c.rest.get_last_quote(ticker.strip().upper())
+    if record is None:
+        return pd.Series(dtype="object")
+    s = pd.Series(_attrs_to_dict(record))
+    sip_ns = s.get("sip_timestamp")
+    if sip_ns is not None and not pd.isna(sip_ns):
+        s["sip_timestamp_utc"] = pd.to_datetime(sip_ns, unit="ns", utc=True)
+    return s
+
+
+def get_previous_close(
+    tickers: str | Sequence[str],
+    *,
+    adjusted: bool = True,
+    client: MassiveClient | None = None,
+) -> pd.DataFrame:
+    """Previous trading day's OHLCV bar per ticker.
+
+    Convenience wrapper over Polygon's per-ticker
+    ``previous_close_agg`` endpoint. For a basket, loops one call per
+    ticker. For wide-universe daily updates, prefer
+    :func:`get_daily_grouped` (single bulk call).
+
+    Args:
+        tickers: One or more ticker symbols.
+        adjusted: Server-side split adjustment (default ``True``).
+        client: Override the live REST client.
+
+    Returns:
+        DataFrame with one row per ticker, columns: ``ticker``,
+        ``date``, ``open``, ``high``, ``low``, ``close``, ``volume``,
+        ``vwap``.
+
+    Examples:
+        >>> from agora import equities
+        >>> equities.get_previous_close(["AAPL", "MSFT"])
+    """
+    tickers_list = _norm_tickers(tickers)
+    c = client or get_client()
+    rows = []
+    for t in tickers_list:
+        record = c.rest.get_previous_close_agg(t, adjusted=adjusted)
+        if record is None:
+            continue
+        ts_ms = getattr(record, "timestamp", None)
+        date = (
+            pd.to_datetime(ts_ms, unit="ms", utc=True).tz_convert(None).normalize()
+            if ts_ms is not None else pd.NaT
+        )
+        rows.append({
+            "ticker": getattr(record, "ticker", t),
+            "date": date,
+            "open": getattr(record, "open", None),
+            "high": getattr(record, "high", None),
+            "low": getattr(record, "low", None),
+            "close": getattr(record, "close", None),
+            "volume": getattr(record, "volume", None),
+            "vwap": getattr(record, "vwap", None),
+        })
+    if not rows:
+        return pd.DataFrame(
+            columns=["ticker", "date", "open", "high", "low", "close",
+                     "volume", "vwap"]
+        )
+    return pd.DataFrame(rows)
+
+
 def get_snapshot(
     tickers: str | Sequence[str] | None = None,
     *,

@@ -345,6 +345,493 @@ class MassiveDataApi:
             kwargs["locale"] = locale
         return list(self._client.get_ticker_types(**kwargs))
 
+    # ── Market state ─────────────────────────────────────────────────
+
+    @retry_with_backoff()
+    def get_market_status(self) -> Any:
+        """Current open/closed status across exchanges + currencies + crypto.
+
+        Wraps ``/v1/marketstatus/now``. Returns a single ``MarketStatus``
+        object with attributes ``after_hours``, ``early_hours``,
+        ``market``, ``server_time``, plus nested ``exchanges`` and
+        ``currencies`` objects.
+
+        Raises:
+            MassiveAPIError: If request fails after retries.
+        """
+        logger.debug("Fetching market status")
+        return self._client.get_market_status()
+
+    @retry_with_backoff()
+    def get_market_holidays(self) -> list:
+        """List upcoming market holidays.
+
+        Wraps ``/v1/marketstatus/upcoming``. Returns a list of
+        ``MarketHoliday`` objects with attributes ``date``, ``name``,
+        ``exchange``, ``status`` (e.g. ``"closed"`` / ``"early-close"``),
+        ``open``, ``close``.
+
+        Raises:
+            MassiveAPIError: If request fails after retries.
+        """
+        logger.debug("Fetching market holidays")
+        return list(self._client.get_market_holidays())
+
+    # ── Live ticks ───────────────────────────────────────────────────
+
+    @retry_with_backoff()
+    def get_last_trade(self, ticker: str) -> Any:
+        """Most recent trade for ``ticker``.
+
+        Wraps ``/v2/last/trade/{ticker}``. Returns a ``LastTrade`` object
+        with attributes ``ticker``, ``price``, ``size``, ``exchange``,
+        ``conditions``, ``sip_timestamp``, ``participant_timestamp``,
+        ``trf_timestamp``, ``id``, ``sequence_number``, ``tape``,
+        ``correction``, ``fractional_size``, ``trf_id``.
+
+        Raises:
+            MassiveAPIError: If request fails after retries.
+        """
+        logger.debug(f"Fetching last trade for {ticker}")
+        return self._client.get_last_trade(ticker)
+
+    @retry_with_backoff()
+    def get_last_quote(self, ticker: str) -> Any:
+        """Most recent NBBO quote for ``ticker``.
+
+        Wraps ``/v2/last/nbbo/{ticker}``. Returns a ``LastQuote`` object
+        with attributes ``ticker``, ``bid_price``, ``bid_size``,
+        ``bid_exchange``, ``ask_price``, ``ask_size``, ``ask_exchange``,
+        ``conditions``, ``indicators``, ``sip_timestamp``,
+        ``participant_timestamp``, ``trf_timestamp``, ``sequence_number``,
+        ``tape``.
+
+        Raises:
+            MassiveAPIError: If request fails after retries.
+        """
+        logger.debug(f"Fetching last quote for {ticker}")
+        return self._client.get_last_quote(ticker)
+
+    @retry_with_backoff()
+    def get_previous_close_agg(
+        self, ticker: str, *, adjusted: bool = True,
+    ) -> Any:
+        """Previous trading day's bar for ``ticker``.
+
+        Wraps ``/v2/aggs/ticker/{ticker}/prev``. Returns a
+        ``PreviousCloseAgg`` object with attributes ``ticker``, ``open``,
+        ``high``, ``low``, ``close``, ``volume``, ``vwap``, ``timestamp``.
+
+        Raises:
+            MassiveAPIError: If request fails after retries.
+        """
+        logger.debug(f"Fetching previous close for {ticker}")
+        return self._client.get_previous_close_agg(ticker, adjusted=adjusted)
+
+    # ── Fundamentals ─────────────────────────────────────────────────
+
+    @retry_with_backoff()
+    def list_financials_balance_sheets(
+        self,
+        *,
+        tickers: str | None = None,
+        cik: str | None = None,
+        period_end_gte: str | None = None,
+        period_end_lte: str | None = None,
+        timeframe: str | None = None,
+        limit: int | None = None,
+    ) -> list:
+        """List balance-sheet records for tickers/period.
+
+        Wraps ``/v3/reference/financials/balance-sheets``. Auto-paginated.
+        Returns ``FinancialBalanceSheet`` objects with ~30 line items.
+
+        Args:
+            tickers: One ticker or comma-separated list (string).
+            cik: SEC CIK (alternative to ticker).
+            period_end_gte / period_end_lte: Period-end filter (YYYY-MM-DD).
+            timeframe: ``"annual"`` / ``"quarterly"``.
+            limit: Per-page limit; SDK paginates beyond.
+
+        Raises:
+            MassiveAPIError: If request fails after retries.
+        """
+        logger.debug(
+            "Fetching balance sheets: tickers=%s cik=%s timeframe=%s",
+            tickers, cik, timeframe,
+        )
+        kwargs: dict = {}
+        if tickers is not None:
+            kwargs["tickers"] = tickers
+        if cik is not None:
+            kwargs["cik"] = cik
+        if period_end_gte is not None:
+            kwargs["period_end_gte"] = period_end_gte
+        if period_end_lte is not None:
+            kwargs["period_end_lte"] = period_end_lte
+        if timeframe is not None:
+            kwargs["timeframe"] = timeframe
+        if limit is not None:
+            kwargs["limit"] = limit
+        return list(self._client.list_financials_balance_sheets(**kwargs))
+
+    @retry_with_backoff()
+    def list_financials_cash_flow_statements(
+        self,
+        *,
+        tickers: str | None = None,
+        cik: str | None = None,
+        period_end_gte: str | None = None,
+        period_end_lte: str | None = None,
+        timeframe: str | None = None,
+        limit: int | None = None,
+    ) -> list:
+        """List cash-flow statements. Wraps ``/v3/reference/financials/cash-flow-statements``."""
+        logger.debug(
+            "Fetching cash flow statements: tickers=%s cik=%s timeframe=%s",
+            tickers, cik, timeframe,
+        )
+        kwargs: dict = {}
+        if tickers is not None:
+            kwargs["tickers"] = tickers
+        if cik is not None:
+            kwargs["cik"] = cik
+        if period_end_gte is not None:
+            kwargs["period_end_gte"] = period_end_gte
+        if period_end_lte is not None:
+            kwargs["period_end_lte"] = period_end_lte
+        if timeframe is not None:
+            kwargs["timeframe"] = timeframe
+        if limit is not None:
+            kwargs["limit"] = limit
+        return list(self._client.list_financials_cash_flow_statements(**kwargs))
+
+    @retry_with_backoff()
+    def list_financials_income_statements(
+        self,
+        *,
+        tickers: str | None = None,
+        cik: str | None = None,
+        period_end_gte: str | None = None,
+        period_end_lte: str | None = None,
+        timeframe: str | None = None,
+        limit: int | None = None,
+    ) -> list:
+        """List income statements. Wraps ``/v3/reference/financials/income-statements``."""
+        logger.debug(
+            "Fetching income statements: tickers=%s cik=%s timeframe=%s",
+            tickers, cik, timeframe,
+        )
+        kwargs: dict = {}
+        if tickers is not None:
+            kwargs["tickers"] = tickers
+        if cik is not None:
+            kwargs["cik"] = cik
+        if period_end_gte is not None:
+            kwargs["period_end_gte"] = period_end_gte
+        if period_end_lte is not None:
+            kwargs["period_end_lte"] = period_end_lte
+        if timeframe is not None:
+            kwargs["timeframe"] = timeframe
+        if limit is not None:
+            kwargs["limit"] = limit
+        return list(self._client.list_financials_income_statements(**kwargs))
+
+    @retry_with_backoff()
+    def list_financials_ratios(
+        self,
+        *,
+        ticker: str | None = None,
+        cik: str | None = None,
+        limit: int | None = None,
+    ) -> list:
+        """List point-in-time financial ratios for a ticker.
+
+        Wraps ``/v3/reference/financials/ratios``. Returns rows with
+        market-derived ratios (P/E, P/B, dividend_yield, debt_to_equity,
+        ev_to_ebitda, etc.) per snapshot date. Daily updates.
+
+        Raises:
+            MassiveAPIError: If request fails after retries.
+        """
+        logger.debug("Fetching ratios: ticker=%s cik=%s", ticker, cik)
+        kwargs: dict = {}
+        if ticker is not None:
+            kwargs["ticker"] = ticker
+        if cik is not None:
+            kwargs["cik"] = cik
+        if limit is not None:
+            kwargs["limit"] = limit
+        return list(self._client.list_financials_ratios(**kwargs))
+
+    # ── Short data ───────────────────────────────────────────────────
+
+    @retry_with_backoff()
+    def list_short_interest(
+        self,
+        *,
+        ticker: str | None = None,
+        settlement_date_gte: str | None = None,
+        settlement_date_lte: str | None = None,
+        limit: int | None = None,
+    ) -> list:
+        """List short-interest records (bi-monthly settlement dates).
+
+        Wraps ``/stocks/v1/short-interest``. Each record carries
+        ``ticker``, ``settlement_date``, ``short_interest``,
+        ``avg_daily_volume``, ``days_to_cover``.
+
+        Raises:
+            MassiveAPIError: If request fails after retries.
+        """
+        logger.debug(
+            "Fetching short interest: ticker=%s settle=[%s, %s]",
+            ticker, settlement_date_gte, settlement_date_lte,
+        )
+        kwargs: dict = {}
+        if ticker is not None:
+            kwargs["ticker"] = ticker
+        if settlement_date_gte is not None:
+            kwargs["settlement_date_gte"] = settlement_date_gte
+        if settlement_date_lte is not None:
+            kwargs["settlement_date_lte"] = settlement_date_lte
+        if limit is not None:
+            kwargs["limit"] = limit
+        return list(self._client.list_short_interest(**kwargs))
+
+    @retry_with_backoff()
+    def list_short_volume(
+        self,
+        *,
+        ticker: str | None = None,
+        date_gte: str | None = None,
+        date_lte: str | None = None,
+        limit: int | None = None,
+    ) -> list:
+        """List daily short-volume records.
+
+        Wraps ``/stocks/v1/short-volume``. Each record carries
+        ``ticker``, ``date``, ``short_volume``, ``total_volume``,
+        ``short_volume_ratio`` plus per-venue breakouts.
+
+        Raises:
+            MassiveAPIError: If request fails after retries.
+        """
+        logger.debug(
+            "Fetching short volume: ticker=%s date=[%s, %s]",
+            ticker, date_gte, date_lte,
+        )
+        kwargs: dict = {}
+        if ticker is not None:
+            kwargs["ticker"] = ticker
+        if date_gte is not None:
+            kwargs["date_gte"] = date_gte
+        if date_lte is not None:
+            kwargs["date_lte"] = date_lte
+        if limit is not None:
+            kwargs["limit"] = limit
+        return list(self._client.list_short_volume(**kwargs))
+
+    @retry_with_backoff()
+    def list_stocks_floats(
+        self,
+        *,
+        ticker: str | None = None,
+        limit: int | None = None,
+    ) -> list:
+        """List stock-float records.
+
+        Wraps ``/stocks/v1/floats``. Each record carries ``ticker``,
+        ``effective_date``, ``free_float``, ``free_float_percent``.
+
+        Raises:
+            MassiveAPIError: If request fails after retries.
+        """
+        logger.debug(f"Fetching floats: ticker={ticker}")
+        kwargs: dict = {}
+        if ticker is not None:
+            kwargs["ticker"] = ticker
+        if limit is not None:
+            kwargs["limit"] = limit
+        return list(self._client.list_stocks_floats(**kwargs))
+
+    # ── ETF (ETF Global feed) ────────────────────────────────────────
+
+    @retry_with_backoff()
+    def get_etf_global_constituents(
+        self,
+        *,
+        composite_ticker: str | None = None,
+        constituent_ticker: str | None = None,
+        effective_date: str | None = None,
+        effective_date_gte: str | None = None,
+        effective_date_lte: str | None = None,
+        limit: int | None = None,
+    ) -> list:
+        """List ETF holdings (constituents).
+
+        Wraps ETF Global's constituents endpoint. Each record carries
+        ``composite_ticker`` (the ETF), ``constituent_ticker`` (the
+        underlying), ``shares_held``, ``weight``, ``market_value``,
+        plus identifiers (ISIN/SEDOL/FIGI).
+
+        Raises:
+            MassiveAPIError: If request fails after retries.
+        """
+        logger.debug(
+            "Fetching ETF constituents: etf=%s constituent=%s effective_date=%s",
+            composite_ticker, constituent_ticker, effective_date,
+        )
+        kwargs: dict = {}
+        if composite_ticker is not None:
+            kwargs["composite_ticker"] = composite_ticker
+        if constituent_ticker is not None:
+            kwargs["constituent_ticker"] = constituent_ticker
+        if effective_date is not None:
+            kwargs["effective_date"] = effective_date
+        if effective_date_gte is not None:
+            kwargs["effective_date_gte"] = effective_date_gte
+        if effective_date_lte is not None:
+            kwargs["effective_date_lte"] = effective_date_lte
+        if limit is not None:
+            kwargs["limit"] = limit
+        return list(self._client.get_etf_global_constituents(**kwargs))
+
+    @retry_with_backoff()
+    def get_etf_global_fund_flows(
+        self,
+        *,
+        composite_ticker: str | None = None,
+        effective_date: str | None = None,
+        effective_date_gte: str | None = None,
+        effective_date_lte: str | None = None,
+        limit: int | None = None,
+    ) -> list:
+        """List ETF daily net fund flows.
+
+        Each record carries ``composite_ticker``, ``effective_date``,
+        ``fund_flow`` (USD), ``nav``, ``shares_outstanding``.
+
+        Raises:
+            MassiveAPIError: If request fails after retries.
+        """
+        logger.debug(
+            "Fetching ETF fund flows: etf=%s effective_date=%s",
+            composite_ticker, effective_date,
+        )
+        kwargs: dict = {}
+        if composite_ticker is not None:
+            kwargs["composite_ticker"] = composite_ticker
+        if effective_date is not None:
+            kwargs["effective_date"] = effective_date
+        if effective_date_gte is not None:
+            kwargs["effective_date_gte"] = effective_date_gte
+        if effective_date_lte is not None:
+            kwargs["effective_date_lte"] = effective_date_lte
+        if limit is not None:
+            kwargs["limit"] = limit
+        return list(self._client.get_etf_global_fund_flows(**kwargs))
+
+    @retry_with_backoff()
+    def get_etf_global_profiles(
+        self,
+        *,
+        composite_ticker: str | None = None,
+        effective_date: str | None = None,
+        effective_date_gte: str | None = None,
+        effective_date_lte: str | None = None,
+        limit: int | None = None,
+    ) -> list:
+        """List ETF profile metadata (issuer, AUM, fees, exposure, etc.).
+
+        ETF Global's profile endpoint surfaces ~50 metadata fields per
+        ETF including ``issuer``, ``aum``, ``creation_unit_size``,
+        ``distribution_frequency``, ``industry_exposure``, etc.
+
+        Raises:
+            MassiveAPIError: If request fails after retries.
+        """
+        logger.debug(
+            "Fetching ETF profiles: etf=%s effective_date=%s",
+            composite_ticker, effective_date,
+        )
+        kwargs: dict = {}
+        if composite_ticker is not None:
+            kwargs["composite_ticker"] = composite_ticker
+        if effective_date is not None:
+            kwargs["effective_date"] = effective_date
+        if effective_date_gte is not None:
+            kwargs["effective_date_gte"] = effective_date_gte
+        if effective_date_lte is not None:
+            kwargs["effective_date_lte"] = effective_date_lte
+        if limit is not None:
+            kwargs["limit"] = limit
+        return list(self._client.get_etf_global_profiles(**kwargs))
+
+    @retry_with_backoff()
+    def get_etf_global_analytics(
+        self,
+        *,
+        composite_ticker: str | None = None,
+        effective_date: str | None = None,
+        effective_date_gte: str | None = None,
+        effective_date_lte: str | None = None,
+        limit: int | None = None,
+    ) -> list:
+        """List ETF quant scores / analytics (risk, reward, fundamental, etc.).
+
+        Raises:
+            MassiveAPIError: If request fails after retries.
+        """
+        logger.debug(
+            "Fetching ETF analytics: etf=%s effective_date=%s",
+            composite_ticker, effective_date,
+        )
+        kwargs: dict = {}
+        if composite_ticker is not None:
+            kwargs["composite_ticker"] = composite_ticker
+        if effective_date is not None:
+            kwargs["effective_date"] = effective_date
+        if effective_date_gte is not None:
+            kwargs["effective_date_gte"] = effective_date_gte
+        if effective_date_lte is not None:
+            kwargs["effective_date_lte"] = effective_date_lte
+        if limit is not None:
+            kwargs["limit"] = limit
+        return list(self._client.get_etf_global_analytics(**kwargs))
+
+    @retry_with_backoff()
+    def get_etf_global_taxonomies(
+        self,
+        *,
+        composite_ticker: str | None = None,
+        effective_date: str | None = None,
+        effective_date_gte: str | None = None,
+        effective_date_lte: str | None = None,
+        limit: int | None = None,
+    ) -> list:
+        """List ETF taxonomies (asset_class, category, focus, etc.).
+
+        Raises:
+            MassiveAPIError: If request fails after retries.
+        """
+        logger.debug(
+            "Fetching ETF taxonomies: etf=%s effective_date=%s",
+            composite_ticker, effective_date,
+        )
+        kwargs: dict = {}
+        if composite_ticker is not None:
+            kwargs["composite_ticker"] = composite_ticker
+        if effective_date is not None:
+            kwargs["effective_date"] = effective_date
+        if effective_date_gte is not None:
+            kwargs["effective_date_gte"] = effective_date_gte
+        if effective_date_lte is not None:
+            kwargs["effective_date_lte"] = effective_date_lte
+        if limit is not None:
+            kwargs["limit"] = limit
+        return list(self._client.get_etf_global_taxonomies(**kwargs))
+
     @retry_with_backoff()
     def get_related_companies(self, ticker: str) -> list:
         """
