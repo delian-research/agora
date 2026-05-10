@@ -20,6 +20,7 @@ dependencies = [
     "boto3>=1.42.97",
     "holidays>=0.94",
     "massive>=2.4.0",
+    "matplotlib>=3.10.9",
     "numpy>=2.4.4",
     "pandas>=3.0.2",
     "pandas-market-calendars>=5.3.2",
