@@ -70,8 +70,8 @@ jobs:
         run: uv run mypy agora/equities agora/loaders agora/client.py agora/config.py agora/errors.py
 
       - name: Run pytest with coverage
-        # Coverage floor is the current CI baseline (36% — note: this is
-        # lower than the local baseline of 46% because tests that depend
-        # on data/ skip on the runner where data/ is absent). Raise it in
-        # future PRs as test coverage grows — never let it drop.
-        run: uv run pytest -v --cov=agora --cov-report=term-missing --cov-fail-under=35
+        # Coverage floor is the current CI baseline. Local baseline is
+        # higher (~64%) because tests that depend on data/ skip on the
+        # runner where data/ is absent. Raise the floor in future PRs as
+        # test coverage grows — never let it drop.
+        run: uv run pytest -v --cov=agora --cov-report=term-missing --cov-fail-under=55
