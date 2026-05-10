@@ -57,6 +57,7 @@ _VALID_FIELDS = ("open", "high", "low", "close", "volume", "trades", "vwap")
 
 ReturnMethod = Literal["simple", "log"]
 Source = Literal["parquet", "rest"]
+Calendar = Literal["union", "intersection"]
 
 
 # ── Internal helpers ────────────────────────────────────────────────
@@ -308,6 +309,7 @@ def get_daily_prices(
     adjusted: bool = True,
     source: Source = "parquet",
     fill: bool = False,
+    calendar: Calendar = "union",
     strict: bool = False,
     data_dir: Path | str | None = None,
     client: MassiveClient | None = None,
@@ -327,6 +329,11 @@ def get_daily_prices(
             ``source="rest"``, the API returns adjusted prices directly.
         source: ``"parquet"`` (local, fast) or ``"rest"`` (live, per-ticker).
         fill: Forward-fill missing values across the index.
+        calendar: How to align dates across tickers.
+            ``"union"`` (default) keeps every date any ticker traded.
+            ``"intersection"`` keeps only dates where every requested
+            ticker has data — useful for cross-section analysis where
+            unequal trading windows cause issues.
         strict: When ``source="rest"`` and any per-ticker API call fails,
             ``strict=True`` re-raises the first error and aborts.
             ``strict=False`` (default) logs a warning, skips the failing
@@ -378,6 +385,12 @@ def get_daily_prices(
     else:
         result = _pivot_multi(df, fields_list, tickers_list)
 
+    if calendar == "intersection":
+        # Drop dates where any ticker is missing data.
+        result = result.dropna(how="any")
+    elif calendar != "union":
+        raise ValueError(f"calendar must be 'union' or 'intersection', got {calendar!r}")
+
     if fill:
         result = result.ffill()
 
@@ -398,6 +411,7 @@ def get_daily_returns(
     adjusted: bool = True,
     source: Source = "parquet",
     fill: bool = True,
+    calendar: Calendar = "union",
     strict: bool = False,
     data_dir: Path | str | None = None,
     client: MassiveClient | None = None,
@@ -420,7 +434,8 @@ def get_daily_returns(
     prices = get_daily_prices(
         tickers, start, end,
         period=period, fields="close",
-        adjusted=adjusted, source=source, fill=fill, strict=strict,
+        adjusted=adjusted, source=source, fill=fill,
+        calendar=calendar, strict=strict,
         data_dir=data_dir, client=client,
     )
     if prices.empty:
@@ -449,6 +464,7 @@ def get_volume(
     adjusted: bool = True,
     source: Source = "parquet",
     fill: bool = False,
+    calendar: Calendar = "union",
     strict: bool = False,
     data_dir: Path | str | None = None,
     client: MassiveClient | None = None,
@@ -465,7 +481,8 @@ def get_volume(
     return get_daily_prices(
         tickers, start, end,
         period=period, fields="volume",
-        adjusted=adjusted, source=source, fill=fill, strict=strict,
+        adjusted=adjusted, source=source, fill=fill,
+        calendar=calendar, strict=strict,
         data_dir=data_dir, client=client,
     )
 

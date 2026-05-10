@@ -51,9 +51,11 @@ testpaths = ["tests"]
 python_files = ["test_*.py"]
 addopts = "-q --strict-markers"
 filterwarnings = [
-    # The shim intentionally warns; tests assert it does, but other tests
-    # importing from the canonical path shouldn't see it.
+    # Shims intentionally warn. Tests that exercise the shim assert the
+    # warning explicitly via pytest.warns; other tests importing from the
+    # canonical path shouldn't see the message.
     "ignore::DeprecationWarning:agora.loaders.s3",
+    "ignore::DeprecationWarning:agora.adapters.market",
 ]
 
 # ── Ruff ────────────────────────────────────────────────────────────
