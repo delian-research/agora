@@ -26,8 +26,12 @@ venv/
 .env.*
 !.env.example
 
-# Generated data (~327 MB of Parquet)
-data/
+# Generated data (~327 MB of Parquet) — exclude contents but allow
+# explicit re-inclusions below for config files that live alongside
+# generated outputs.
+data/*
+# Index allowlist is a config file, not generated output.
+!data/indices_included.csv
 
 # Claude Code local settings (may contain API keys in command history)
 .claude/settings.local.json

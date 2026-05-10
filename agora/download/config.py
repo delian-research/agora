@@ -24,8 +24,9 @@ S3_BUCKET = os.getenv("MASSIVE_S3_BUCKET", "flatfiles")
 # Default data output directory
 DATA_DIR = Path(__file__).resolve().parents[2] / "data"
 
-# Rate limit for REST API (calls per minute)
-REST_RATE_LIMIT = 5
+# Rate limit for REST API (calls per minute). Set to your subscription's
+# tier ceiling (Stocks Starter ~100/min; Developer/Advanced are unlimited).
+REST_RATE_LIMIT = 500
 
 
 def get_s3_client():
