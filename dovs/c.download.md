@@ -310,15 +310,49 @@ merged = merged[
 
 ```
 agora/download/
-├── __init__.py        Exports: download_stocks, download_forex, download_reference
+├── __init__.py        Exports: download_stocks, download_forex, download_reference, …
 ├── __main__.py        python -m agora.download entrypoint
-├── cli.py             Argument parsing, subcommands
+├── cli.py             Argument parsing, subcommands; main(argv, ...) -> int
 ├── config.py          S3 credentials, data directory, rate limits
 ├── checkpoint.py      JSON-based resume tracking
+├── result.py          DownloadResult dataclass (return type for every download_*)
+├── metrics.py         download_metrics() context manager (timing + counters)
 ├── stocks.py          S3 flat file downloader → yearly Parquet
 ├── forex.py           REST API downloader → single Parquet
 └── reference.py       Tickers, exchanges, splits, dividends, ticker events
 ```
+
+### Return type: `DownloadResult`
+
+Every `download_*` function returns a structured
+:class:`agora.download.result.DownloadResult` rather than a plain `Path`.
+The dataclass exposes:
+
+| Field | Description |
+|---|---|
+| `stage` | Identifier (e.g. `"download_stocks"`) |
+| `output_dir` | Where files were written |
+| `rows_written` / `files_written` / `bytes_written` | Output volume |
+| `duration_seconds`, `started_at`, `finished_at` | Wall-clock timing |
+| `requested` / `completed` / `skipped` / `failed` | Work-unit accounting (years for stocks; tickers for forex/events) |
+| `warnings` | Free-form notes |
+| `checkpoint_path` | The checkpoint file used, if any |
+| `succeeded` (property) | `True` iff `failed` is empty |
+
+Each downloader wraps its body in a `download_metrics(...)` context
+manager which stamps `started_at` / `finished_at` / `duration_seconds`
+and emits one structured `logger.info` summary line when the operation
+finishes — so cron logs are greppable for ops.
+
+Recommended cron-side persistence (delian): wrap the call and persist
+`result.to_dict()` to `data_quality.download_runs` for trend analysis::
+
+    from agora.download import download_stocks
+
+    result = download_stocks()
+    if not result.succeeded:
+        alert(f"download_stocks lost {len(result.failed)} years: {result.failed}")
+    persist_run_record(result.to_dict())  # JSON-serializable
 
 ### Design Decisions
 
