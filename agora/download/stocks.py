@@ -63,6 +63,10 @@ def download_stocks(
     checkpoint = Checkpoint(output_dir / ".checkpoint.json")
     s3 = get_s3_client()
 
+    years_completed: list[int] = []
+    years_skipped: list[int] = []
+    years_empty: list[int] = []
+
     for year in range(start_year, end_year + 1):
         parquet_path = output_dir / f"{year}.parquet"
 
@@ -70,6 +74,7 @@ def download_stocks(
         year_key = f"year:{year}"
         if resume and checkpoint.is_done(year_key):
             logger.info(f"Skipping {year} (already complete)")
+            years_skipped.append(year)
             continue
 
         logger.info(f"Downloading {year}...")
@@ -77,6 +82,7 @@ def download_stocks(
 
         if not files:
             logger.warning(f"No files found for {year}")
+            years_empty.append(year)
             continue
 
         year_frames = []
@@ -102,6 +108,7 @@ def download_stocks(
 
         if not year_frames:
             logger.warning(f"No accessible data for {year} (skipped {skipped} files)")
+            years_empty.append(year)
             continue
 
         # Combine all days for this year into a single DataFrame
@@ -124,5 +131,19 @@ def download_stocks(
         )
 
         checkpoint.mark_done(year_key)
+        years_completed.append(year)
+
+    requested = list(range(start_year, end_year + 1))
+    logger.info(
+        "download_stocks summary: requested=%d, downloaded=%d, skipped=%d, empty=%d",
+        len(requested), len(years_completed), len(years_skipped), len(years_empty),
+        extra={
+            "stage": "download_stocks.summary",
+            "requested": requested,
+            "downloaded": years_completed,
+            "skipped": years_skipped,
+            "empty": years_empty,
+        },
+    )
 
     return output_dir

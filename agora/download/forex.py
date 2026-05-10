@@ -72,6 +72,7 @@ def download_forex(
 
     completed = 0
     skipped = 0
+    failed: list[str] = []
 
     for ticker in pairs:
         if resume and checkpoint.is_done(ticker):
@@ -127,7 +128,22 @@ def download_forex(
                 skipped += 1
             else:
                 logger.error(f"  {ticker}: API error: {e}")
+                failed.append(ticker)
                 # Don't mark as done — will retry on next run
+
+    # Per-run summary line for ops (greppable, structured extra).
+    logger.info(
+        "download_forex summary: requested=%d, downloaded=%d, skipped=%d, failed=%d%s",
+        len(pairs), completed, skipped, len(failed),
+        f" (failed: {failed})" if failed else "",
+        extra={
+            "stage": "download_forex.summary",
+            "requested": len(pairs),
+            "downloaded": completed,
+            "skipped": skipped,
+            "failed": failed,
+        },
+    )
 
     # Combine and write
     if all_frames:

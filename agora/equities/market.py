@@ -182,10 +182,19 @@ def _fetch_rest(
     end: str,
     adjusted: bool,
     client: MassiveClient | None,
-) -> pd.DataFrame:
-    """Long-format OHLCV DataFrame from live REST per ticker."""
+    *,
+    strict: bool = False,
+) -> tuple[pd.DataFrame, list[tuple[str, Exception]]]:
+    """Long-format OHLCV DataFrame from live REST per ticker.
+
+    Returns:
+        (DataFrame, failed) where ``failed`` is a list of
+        ``(ticker, exception)`` tuples for tickers whose API call raised.
+        When ``strict=True`` the first failure raises and the call aborts.
+    """
     c = client or get_client()
     rows = []
+    failed: list[tuple[str, Exception]] = []
     for t in tickers:
         try:
             aggs = c.rest.get_aggregates(
@@ -194,7 +203,14 @@ def _fetch_rest(
                 adjusted=adjusted,
             )
         except MassiveAPIError as e:
-            logger.warning("REST aggregates for %s: %s", t, e)
+            if strict:
+                raise
+            logger.warning(
+                "REST aggregates for %s failed: %s",
+                t, e,
+                extra={"ticker": t, "error": type(e).__name__, "stage": "get_aggregates"},
+            )
+            failed.append((t, e))
             continue
         for a in aggs:
             ts = pd.to_datetime(a.timestamp, unit="ms", utc=True).tz_convert(None).normalize()
@@ -206,7 +222,7 @@ def _fetch_rest(
                 "trades": getattr(a, "transactions", None),
                 "vwap": getattr(a, "vwap", None),
             })
-    return pd.DataFrame(rows)
+    return pd.DataFrame(rows), failed
 
 
 # ── Pivot helpers ───────────────────────────────────────────────────
@@ -292,6 +308,7 @@ def get_daily_prices(
     adjusted: bool = True,
     source: Source = "parquet",
     fill: bool = False,
+    strict: bool = False,
     data_dir: Path | str | None = None,
     client: MassiveClient | None = None,
 ) -> pd.DataFrame:
@@ -310,6 +327,10 @@ def get_daily_prices(
             ``source="rest"``, the API returns adjusted prices directly.
         source: ``"parquet"`` (local, fast) or ``"rest"`` (live, per-ticker).
         fill: Forward-fill missing values across the index.
+        strict: When ``source="rest"`` and any per-ticker API call fails,
+            ``strict=True`` re-raises the first error and aborts.
+            ``strict=False`` (default) logs a warning, skips the failing
+            ticker, and exposes the list as ``df.attrs["failed_tickers"]``.
         data_dir: Override the Parquet data directory.
         client: Override the live REST client.
 
@@ -320,6 +341,10 @@ def get_daily_prices(
           input order.
         - Multi-field call (``fields=("open","close","volume")``): columns
           are a MultiIndex of ``(field, ticker)``.
+
+        If any tickers failed in non-strict REST mode, the returned
+        DataFrame's ``.attrs["failed_tickers"]`` is set to the list of
+        failed symbols.
 
     Examples:
         >>> get_daily_prices(["AAPL","MSFT"], period="1y")
@@ -333,14 +358,19 @@ def get_daily_prices(
     fields_list, is_single = _norm_fields(fields)
     start_date, end_date = _resolve_dates(start, end, period)
 
+    failed: list[tuple[str, Exception]] = []
     if source == "parquet":
         df = _fetch_parquet(tickers_list, start_date, end_date, adjusted, data_dir)
     elif source == "rest":
-        df = _fetch_rest(tickers_list, start_date, end_date, adjusted, client)
+        df, failed = _fetch_rest(
+            tickers_list, start_date, end_date, adjusted, client, strict=strict,
+        )
     else:
         raise ValueError(f"source must be 'parquet' or 'rest', got {source!r}")
 
     if df.empty:
+        if failed:
+            df.attrs["failed_tickers"] = [t for t, _ in failed]
         return df
 
     if is_single:
@@ -350,6 +380,10 @@ def get_daily_prices(
 
     if fill:
         result = result.ffill()
+
+    # Pivot drops .attrs, so set on the final result.
+    if failed:
+        result.attrs["failed_tickers"] = [t for t, _ in failed]
 
     return result
 
@@ -364,6 +398,7 @@ def get_daily_returns(
     adjusted: bool = True,
     source: Source = "parquet",
     fill: bool = True,
+    strict: bool = False,
     data_dir: Path | str | None = None,
     client: MassiveClient | None = None,
 ) -> pd.DataFrame:
@@ -375,14 +410,17 @@ def get_daily_returns(
     Args:
         method: ``"simple"`` for ``(p_t / p_{t-1}) - 1``, or ``"log"`` for
             ``ln(p_t / p_{t-1})``.
+        strict: See :func:`get_daily_prices`.
 
     Returns:
-        DataFrame indexed by date with one column per ticker.
+        DataFrame indexed by date with one column per ticker. If any
+        REST tickers failed in non-strict mode, ``df.attrs["failed_tickers"]``
+        is propagated from the underlying price fetch.
     """
     prices = get_daily_prices(
         tickers, start, end,
         period=period, fields="close",
-        adjusted=adjusted, source=source, fill=fill,
+        adjusted=adjusted, source=source, fill=fill, strict=strict,
         data_dir=data_dir, client=client,
     )
     if prices.empty:
@@ -395,7 +433,11 @@ def get_daily_returns(
     else:
         raise ValueError(f"method must be 'simple' or 'log', got {method!r}")
 
-    return returns.dropna(how="all")
+    result = returns.dropna(how="all")
+    # Propagate failed_tickers across the pct_change/log/dropna chain.
+    if "failed_tickers" in prices.attrs:
+        result.attrs["failed_tickers"] = prices.attrs["failed_tickers"]
+    return result
 
 
 def get_volume(
@@ -407,6 +449,7 @@ def get_volume(
     adjusted: bool = True,
     source: Source = "parquet",
     fill: bool = False,
+    strict: bool = False,
     data_dir: Path | str | None = None,
     client: MassiveClient | None = None,
 ) -> pd.DataFrame:
@@ -422,7 +465,7 @@ def get_volume(
     return get_daily_prices(
         tickers, start, end,
         period=period, fields="volume",
-        adjusted=adjusted, source=source, fill=fill,
+        adjusted=adjusted, source=source, fill=fill, strict=strict,
         data_dir=data_dir, client=client,
     )
 
@@ -430,6 +473,7 @@ def get_volume(
 def get_snapshot(
     tickers: str | Sequence[str] | None = None,
     *,
+    strict: bool = False,
     client: MassiveClient | None = None,
 ) -> pd.DataFrame:
     """Current market snapshot for one, many, or all US equity tickers.
@@ -443,6 +487,12 @@ def get_snapshot(
       every US ticker), filtered locally — dramatically faster than N
       per-ticker calls.
     - **None**: bulk fetch, no filter (~10K rows).
+
+    Args:
+        strict: When ``True``, propagate API errors. When ``False`` (default),
+            single-ticker errors return an empty DataFrame and log a warning
+            with structured ``extra`` data; the bulk path always raises
+            (no silent failure mode is meaningful for a single bulk call).
 
     Returns:
         DataFrame with one row per ticker, columns include ticker,
@@ -467,8 +517,16 @@ def get_snapshot(
             snap = c.rest.get_snapshot(tickers_list[0])
             snaps = [snap]
         except MassiveAPIError as e:
-            logger.warning("snapshot for %s: %s", tickers_list[0], e)
-            return pd.DataFrame()
+            if strict:
+                raise
+            logger.warning(
+                "snapshot for %s failed: %s",
+                tickers_list[0], e,
+                extra={"ticker": tickers_list[0], "error": type(e).__name__, "stage": "get_snapshot"},
+            )
+            empty = pd.DataFrame()
+            empty.attrs["failed_tickers"] = [tickers_list[0]]
+            return empty
     else:
         # Bulk fetch + optional local filter
         all_snaps = c.rest.get_all_snapshots()
