@@ -13,12 +13,15 @@ Public surface (a "verb-shape" list):
         get_daily_grouped — all-tickers cross-section for one date
         get_snapshot      — current market snapshot (live REST)
 
-    Reference (stubs in v1)
-        get_exchange, get_currency, get_country
-        get_market_cap, get_shares_out
+    Reference
+        get_tickers       — list-endpoint universe (paginated)
+        get_ticker_details — rich per-ticker profile (~25 fields)
 
-    Company (stubs; news/earnings need Benzinga entitlement)
-        get_industry, get_sector
+    Company classification
+        get_industry      — SIC industry description per ticker
+        get_sector        — broad SIC-division sector per ticker
+
+    Company (Benzinga add-on — stubs require entitlement)
         get_major_news, get_earnings
 
     Corporate actions (stubs in v1)
@@ -54,13 +57,10 @@ from agora.equities.market import (
     get_volume,
 )
 
-# ── Reference (stubs) ───────────────────────────────────────────────
+# ── Reference ───────────────────────────────────────────────────────
 from agora.equities.reference import (
-    get_country,
-    get_currency,
-    get_exchange,
-    get_market_cap,
-    get_shares_out,
+    get_ticker_details,
+    get_tickers,
 )
 
 __all__ = [
@@ -74,11 +74,8 @@ __all__ = [
     "get_daily_grouped",
     "get_snapshot",
     # Reference
-    "get_exchange",
-    "get_currency",
-    "get_country",
-    "get_market_cap",
-    "get_shares_out",
+    "get_tickers",
+    "get_ticker_details",
     # Company
     "get_industry",
     "get_sector",
