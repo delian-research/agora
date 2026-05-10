@@ -1,14 +1,19 @@
 """Static / point-in-time equity reference data via the Massive REST API.
 
-Two helpers, one per Polygon endpoint:
+Five helpers, one per Polygon endpoint:
 
     - :func:`get_tickers`         wraps ``/v3/reference/tickers`` (list)
     - :func:`get_ticker_details`  wraps ``/v3/reference/tickers/{ticker}``
+    - :func:`get_ticker_types`    wraps ``/v3/reference/tickers/types``
+    - :func:`get_exchanges`       wraps ``/v3/reference/exchanges``
+    - :func:`get_related_tickers` wraps ``/v1/related-companies/{ticker}``
 
-Use :func:`get_tickers` to discover the universe with light per-row
-metadata; use :func:`get_ticker_details` to pull rich per-ticker
-profiles (market cap, shares outstanding, SIC code, description,
-exchange, list date, etc.).
+Use :func:`get_tickers` to discover the universe; :func:`get_ticker_details`
+for a rich per-ticker profile (market cap, shares outstanding, SIC code,
+description, etc.); :func:`get_ticker_types` and :func:`get_exchanges` as
+small lookup tables for joining against the ``type`` and
+``primary_exchange`` columns; :func:`get_related_tickers` for similarity
+graph queries.
 
 The earlier scaffold exposed five field-specific stubs
 (``get_exchange``, ``get_currency``, ``get_country``, ``get_market_cap``,
@@ -42,6 +47,26 @@ _LIST_FIELDS = (
     "share_class_figi",
     "last_updated_utc",
     "delisted_utc",
+)
+
+_EXCHANGE_FIELDS = (
+    "id",
+    "mic",
+    "operating_mic",
+    "name",
+    "type",
+    "asset_class",
+    "locale",
+    "acronym",
+    "participant_id",
+    "url",
+)
+
+_TICKER_TYPE_FIELDS = (
+    "code",
+    "description",
+    "asset_class",
+    "locale",
 )
 
 _DETAILS_FIELDS = (
@@ -242,3 +267,133 @@ def get_ticker_details(
             df[col] = pd.to_datetime(df[col], errors="coerce")
 
     return df
+
+
+def get_exchanges(
+    *,
+    asset_class: str | None = None,
+    locale: str | None = None,
+    client: MassiveClient | None = None,
+) -> pd.DataFrame:
+    """The catalog of exchanges (venues) Polygon recognizes.
+
+    A small reference table — useful for joining against the
+    ``primary_exchange`` MIC column on :func:`get_tickers` /
+    :func:`get_ticker_details`.
+
+    Args:
+        asset_class: ``"stocks"`` / ``"options"`` / ``"crypto"`` / ``"fx"``.
+            ``None`` returns every asset class.
+        locale: ``"us"`` / ``"global"``. ``None`` returns every locale.
+        client: Override the live REST client.
+
+    Returns:
+        DataFrame with columns: ``id``, ``mic``, ``operating_mic``,
+        ``name``, ``type``, ``asset_class``, ``locale``, ``acronym``,
+        ``participant_id``, ``url``.
+
+    Examples:
+        >>> from agora import equities
+        >>> exchanges = equities.get_exchanges(asset_class="stocks")
+        >>> exchanges[["mic", "name"]].head()
+    """
+    c = client or get_client()
+    records = c.rest.get_exchanges(asset_class=asset_class, locale=locale)
+    if not records:
+        return pd.DataFrame(columns=list(_EXCHANGE_FIELDS))
+    rows = [
+        {field: getattr(r, field, None) for field in _EXCHANGE_FIELDS}
+        for r in records
+    ]
+    return pd.DataFrame(rows, columns=list(_EXCHANGE_FIELDS))
+
+
+def get_ticker_types(
+    *,
+    asset_class: str | None = None,
+    locale: str | None = None,
+    client: MassiveClient | None = None,
+) -> pd.DataFrame:
+    """The catalog of ticker type codes (CS, ETF, ADRC, etc.).
+
+    Small lookup table mapping each ``type`` code Polygon emits to a
+    human-readable description and its asset class. Useful for
+    documenting / joining against the ``type`` column returned by
+    :func:`get_tickers` / :func:`get_ticker_details`.
+
+    Args:
+        asset_class: Filter to one asset class (``"stocks"`` / ``"options"`` / ...).
+        locale: Filter to one locale (``"us"`` / ``"global"``).
+        client: Override the live REST client.
+
+    Returns:
+        DataFrame with columns: ``code``, ``description``, ``asset_class``,
+        ``locale``.
+
+    Examples:
+        >>> from agora import equities
+        >>> equities.get_ticker_types(asset_class="stocks")
+        # code description                       asset_class locale
+        # CS   Common Stock                      stocks      us
+        # ETF  Exchange Traded Fund              stocks      us
+        # ADRC American Depository Receipt Common stocks     us
+        # ...
+    """
+    c = client or get_client()
+    records = c.rest.get_ticker_types(asset_class=asset_class, locale=locale)
+    if not records:
+        return pd.DataFrame(columns=list(_TICKER_TYPE_FIELDS))
+    rows = [
+        {field: getattr(r, field, None) for field in _TICKER_TYPE_FIELDS}
+        for r in records
+    ]
+    return pd.DataFrame(rows, columns=list(_TICKER_TYPE_FIELDS))
+
+
+def get_related_tickers(
+    ticker: str,
+    *,
+    client: MassiveClient | None = None,
+) -> pd.DataFrame:
+    """Tickers Polygon considers similar/related to ``ticker``.
+
+    Per-ticker lookup against ``/v1/related-companies/{ticker}``. The
+    response is typically a small list (~10) of related ticker symbols
+    that Polygon surfaces based on stock characteristics.
+
+    Args:
+        ticker: A single ticker symbol.
+        client: Override the live REST client.
+
+    Returns:
+        DataFrame with one row per related ticker (column: ``ticker``)
+        plus a ``source_ticker`` column denormalized so a basket merge
+        is trivial.
+
+    Examples:
+        >>> from agora import equities
+        >>> equities.get_related_tickers("AAPL")
+        #   ticker source_ticker
+        # 0  MSFT          AAPL
+        # 1  GOOGL         AAPL
+        # 2  ...           AAPL
+    """
+    if not ticker or not isinstance(ticker, str):
+        raise ValueError("ticker must be a non-empty string")
+    source = ticker.strip().upper()
+    if not source:
+        raise ValueError("ticker must be a non-empty string")
+
+    c = client or get_client()
+    records = c.rest.get_related_companies(source)
+
+    if not records:
+        return pd.DataFrame(columns=["ticker", "source_ticker"])
+
+    rows = [
+        {"ticker": getattr(r, "ticker", None), "source_ticker": source}
+        for r in records
+    ]
+    df = pd.DataFrame(rows, columns=["ticker", "source_ticker"])
+    # Drop any rows missing a ticker symbol (defensive).
+    return df[df["ticker"].notna() & (df["ticker"] != "")].reset_index(drop=True)
