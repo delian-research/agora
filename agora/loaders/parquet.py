@@ -17,7 +17,9 @@ The data directory layout it expects:
         ├── exchanges.parquet
         ├── splits.parquet
         ├── dividends.parquet
-        └── ticker_events.parquet
+        ├── ticker_events.parquet
+        ├── security_master.parquet
+        └── security_master_changes.parquet
 
 Examples:
     >>> loader = FlatFileLoader()
@@ -429,6 +431,136 @@ class FlatFileLoader:
             before_end = pd.isna(row["valid_to"]) or dt < row["valid_to"]
             if after_start and before_end:
                 return row["ticker"]
+
+        return None
+
+    # ── Security Master (snapshot + change log) ──────────────────────
+
+    def get_security_master(
+        self,
+        *,
+        active_only: bool = False,
+        market: str | None = None,
+        ticker_type: str | None = None,
+    ) -> pd.DataFrame:
+        """Load the current security master snapshot.
+
+        One row per security identity (``composite_figi`` where present,
+        else ``TICKER:<symbol>`` fallback).
+
+        Args:
+            active_only: Restrict to rows currently flagged active.
+            market: Filter by ``market`` (``stocks``, ``fx``, ``indices``).
+            ticker_type: Filter by ``type`` (``CS``, ``ETF``, ...).
+        """
+        path = self._data_dir / "reference" / "security_master.parquet"
+        if not path.exists():
+            return pd.DataFrame()
+
+        df = pd.read_parquet(path)
+        if active_only:
+            df = df[df["active"].astype(bool)]
+        if market:
+            df = df[df["market"] == market]
+        if ticker_type:
+            df = df[df["type"] == ticker_type]
+        return df.reset_index(drop=True)
+
+    def get_security_master_changes(
+        self,
+        *,
+        composite_figi: str | None = None,
+        ticker: str | None = None,
+        change_type: str | None = None,
+        start: str | None = None,
+        end: str | None = None,
+        run_id: str | None = None,
+    ) -> pd.DataFrame:
+        """Load the security-master change log with optional filters.
+
+        ``start`` / ``end`` filter on ``detected_at`` (UTC). Pass either
+        ``composite_figi`` or ``ticker`` to scope to one security.
+        """
+        path = self._data_dir / "reference" / "security_master_changes.parquet"
+        if not path.exists():
+            return pd.DataFrame()
+
+        df = pd.read_parquet(path)
+        if df.empty:
+            return df
+
+        if composite_figi:
+            df = df[df["composite_figi"] == composite_figi]
+        if ticker:
+            df = df[df["ticker"] == ticker.upper()]
+        if change_type:
+            df = df[df["change_type"] == change_type]
+        if run_id:
+            df = df[df["run_id"] == run_id]
+        if start:
+            df = df[df["detected_at"] >= pd.Timestamp(start, tz="UTC")]
+        if end:
+            df = df[df["detected_at"] <= pd.Timestamp(end, tz="UTC")]
+
+        return df.sort_values("detected_at").reset_index(drop=True)
+
+    def audit_security(self, composite_figi: str) -> pd.DataFrame:
+        """Return every change-log entry for one security, oldest-first.
+
+        Convenience wrapper over ``get_security_master_changes``.
+        """
+        return self.get_security_master_changes(composite_figi=composite_figi)
+
+    def resolve_security(
+        self,
+        *,
+        composite_figi: str | None = None,
+        ticker: str | None = None,
+        as_of: str | None = None,
+    ) -> pd.Series | None:
+        """Resolve a security row from the master.
+
+        Lookup priority: ``composite_figi`` → exact match. Else
+        ``ticker`` → matches the *current* ticker in the master. If
+        ``as_of`` is given and the ticker doesn't match a current row,
+        we fall back to ``ticker_events.parquet`` to map the historical
+        ticker to its composite_figi and re-query the master.
+
+        Args:
+            composite_figi: Polygon composite_figi.
+            ticker: Symbol (current or historical).
+            as_of: ISO date for historical ticker resolution.
+
+        Returns:
+            One-row Series from the master, or None if not found.
+        """
+        master = self.get_security_master()
+        if master.empty:
+            return None
+
+        if composite_figi:
+            hit = master[master["composite_figi"] == composite_figi]
+            if not hit.empty:
+                return hit.iloc[0]
+            return None
+
+        if ticker:
+            t = ticker.upper()
+            hit = master[master["ticker"] == t]
+            if not hit.empty:
+                return hit.iloc[0]
+
+            # Fall back to ticker_events for historical resolution
+            if as_of:
+                events = self.get_ticker_events()
+                if not events.empty:
+                    ev = events[events["ticker"] == t]
+                    if not ev.empty:
+                        figi = ev["composite_figi"].iloc[0]
+                        hit = master[master["composite_figi"] == figi]
+                        if not hit.empty:
+                            return hit.iloc[0]
+            return None
 
         return None
 

@@ -38,11 +38,15 @@ Common workflows:
   - `python -m agora.download reference`
 - Download ticker event history/security-master table:
   - `python -m agora.download events`
+- Sync the live security master + append timestamped change log:
+  - `python -m agora.download security-master`
+  - One-shot full-history backfill: `python -m agora.download security-master --full-event-backfill`
+  - Universe-allow-partial mode: `python -m agora.download security-master --allow-partial`
 - Force full re-download (ignore checkpoints):
   - `python -m agora.download all --no-resume`
 
 ### Build, lint, and test status
-- Run the smoke suite: `pytest` (runs 38 tests in <1s)
+- Run the smoke suite: `pytest` (~200 tests, runs in ~7s)
 - Run a single test: `pytest tests/test_imports.py::test_module_imports`
 - CI: `.github/workflows/test.yml` runs the same `pytest` invocation on
   every push and PR to `dev` or `main`.
@@ -56,10 +60,11 @@ Common workflows:
 ## High-level architecture
 ### 1) Download pipeline (`agora/download`)
 This is the main ingestion path and current operational center of the repo.
-- `cli.py`: argparse command surface (`stocks`, `forex`, `reference`, `events`, `all`)
+- `cli.py`: argparse command surface (`stocks`, `forex`, `reference`, `events`, `security-master`, `all`)
 - `stocks.py`: S3 flat-file ingestion (`us_stocks_sip/day_aggs_v1`) into yearly Parquet files
 - `forex.py`: REST `list_aggs` ingestion for `*USD` FX pairs into one Parquet file
 - `reference.py`: REST ingestion for tickers/exchanges/splits/dividends plus ticker-event security master
+- `security_master.py`: incremental sync that produces a current-state master + append-only timestamped change log; reads `data/indices_included.csv` for the index allowlist
 - `checkpoint.py`: resumable download tracking via JSON checkpoint files
 - `config.py`: download-specific constants (S3 endpoint/bucket, output `data/` path, REST rate-limit setting)
 
@@ -67,6 +72,7 @@ Output contract (read by other modules):
 - `data/stocks/daily/{year}.parquet`
 - `data/forex/daily_usd.parquet`
 - `data/reference/{tickers,exchanges,splits,dividends,ticker_events}.parquet`
+- `data/reference/security_master.parquet` (current state) + `data/reference/security_master_changes.parquet` (timestamped change log) + `data/reference/snapshots/tickers_<YYYY-MM-DD>.parquet`
 
 ### 2) Data access layer (`agora/loaders`)
 Two retrieval patterns are represented:

@@ -22,12 +22,15 @@ python -m agora.download stocks
 python -m agora.download forex
 python -m agora.download reference
 python -m agora.download events
+
+# Sync the live security master (current snapshot + append-only change log)
+python -m agora.download security-master
 ```
 
 ### CLI Options
 
 ```
-python -m agora.download [-o OUTPUT] [-v] [--no-resume] {stocks,forex,reference,events,all}
+python -m agora.download [-o OUTPUT] [-v] [--no-resume] {stocks,forex,reference,events,security-master,all}
 
 Options:
   -o, --output DIR     Output directory (default: ./data)
@@ -35,7 +38,11 @@ Options:
   --no-resume          Ignore checkpoints, re-download everything
 
 Subcommand options:
-  stocks --start-year YYYY --end-year YYYY   (default: 2021–2026)
+  stocks --start-year YYYY --end-year YYYY    (default: 2021–2026)
+  security-master --no-events                 Skip ticker_events backfill on adds/changes
+                  --full-event-backfill       Pull events for every identity (one-shot)
+                  --allow-partial             Continue if a list_tickers segment fails
+                  --no-snapshot               Skip the dated raw-pull snapshot
 ```
 
 ---
@@ -301,6 +308,135 @@ merged = merged[
 ```
 
 **Source:** REST API `get_ticker_events()` per ticker. Scoped to tickers appearing in downloaded price data, filtered to CS + ETF types (~10,167 tickers). No rate limit on this endpoint — runs at ~18 calls/sec, completes in ~8 minutes.
+
+### Schema: `reference/security_master.parquet` (Live Master)
+
+Current state of every security identity in scope. One row per identity,
+keyed on `composite_figi` (Polygon's stable Bloomberg FIGI). For
+identities without a FIGI (indices, some fx pairs), falls back to
+`ticker` as identity and flags via `identity_source = 'ticker'`.
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `composite_figi` | string | Primary identity (null for indices/fx → ticker fallback) |
+| `share_class_figi` | string | Share-class FIGI |
+| `ticker` | string | Current ticker symbol |
+| `name` | string | Long name |
+| `cik` | string | SEC CIK |
+| `market` | string | `stocks` / `fx` / `indices` |
+| `type` | string | `CS` / `ETF` / `ADRC` / etc. (null for indices) |
+| `locale` | string | `us` |
+| `primary_exchange` | string | MIC code |
+| `currency_name` | string | Reporting currency |
+| `active` | bool | Currently active in Massive's universe |
+| `polygon_last_updated_utc` | string | Polygon's own last-modified timestamp |
+| `first_seen_at` | tz datetime | UTC timestamp of first sync that detected this identity |
+| `last_seen_at` | tz datetime | UTC timestamp of most recent sync that confirmed it |
+| `as_of` | tz datetime | This snapshot's timestamp |
+| `identity_source` | string | `composite_figi` (canonical) or `ticker` (fallback) |
+
+**Universe scope:**
+
+| Market | Filter | Typical row count |
+|--------|--------|------|
+| `stocks` | Types: CS, ETF, ADRC, ADRP, ETN, ETV, FUND, SP, RIGHT, WARRANT | ~11,800 |
+| `fx` | USD-quoted pairs only (`*USD` suffix) | ~116 |
+| `indices` | Allowlist from `data/indices_included.csv` | ~318 |
+
+The allowlist file is a CSV with at minimum a `ticker` column. Edit it
+to control which indices are tracked — no code change required. Missing
+or malformed CSV → empty allowlist (warned, not fatal).
+
+**Source:** Per-(market, type) `list_tickers(active=True)` calls. Each
+sync overwrites this file atomically (write to `.tmp` → `os.replace`).
+
+### Schema: `reference/security_master_changes.parquet` (Append-Only Log)
+
+Every change detected across syncs. New rows are appended; never
+modified or deleted. One UUID `run_id` per sync invocation groups all
+changes from that run.
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `change_id` | string | UUID4 |
+| `composite_figi` | string | Identity affected |
+| `ticker` | string | Ticker at time of change (denormalized for grep) |
+| `change_type` | string | See enum below |
+| `field_name` | string | Affected field for `field_changed`, else null |
+| `old_value` | string | Stringified prior value |
+| `new_value` | string | Stringified new value |
+| `event_date` | string | `YYYY-MM-DD` for renames (Polygon's authoritative date) |
+| `detected_at` | tz datetime | UTC timestamp when *we* observed the change |
+| `source` | string | `bootstrap` / `list_tickers` / `ticker_events_cache` / `ticker_events_api` |
+| `run_id` | string | UUID grouping all changes from one sync |
+
+**`change_type` enum:**
+
+| Type | Triggered by |
+|------|---------|
+| `added` | Identity appeared in the universe for the first time |
+| `deactivated` | Was active in prior master, absent from today's pull |
+| `reactivated` | Was inactive, appears active today |
+| `field_changed` | A watched field changed value (`ticker`, `name`, `primary_exchange`, `type`, `locale`, `currency_name`, `share_class_figi`, `cik`) |
+| `ticker_renamed` | Polygon's ticker_events API confirmed a rename event with an authoritative `event_date` |
+
+`field_changed` records what *we* observed (when we observed it).
+`ticker_renamed` carries Polygon's actual `event_date`, which can predate
+our first detection by years. Both are emitted on detected ticker
+renames so analysis can answer either "when did we know" or "when did
+it actually change."
+
+**Identity model:** `composite_figi` is the canonical key. Two tickers
+that share a FIGI (e.g. `FB` → `META`) are the same identity. A ticker
+that has been used by multiple distinct securities over time (e.g.
+`META` was Roundhill's ETF before Facebook) produces separate rows
+distinguished by `composite_figi`.
+
+**Dedupe semantics:** `ticker_renamed` rows are deduped on
+`(composite_figi, event_date, new_value)` both within a single run and
+against the existing log. Re-running `--full-event-backfill` is
+idempotent — historical events already in the log are skipped.
+
+### `reference/snapshots/tickers_<YYYY-MM-DD>.parquet`
+
+Optional dated raw snapshot of the universe pull. One file per sync
+date. Useful for retrospective "what did the universe look like on
+2026-05-10" questions and for replaying a diff later. Skip with
+`--no-snapshot` if disk is tight.
+
+### Production semantics
+
+- **Atomic writes**: master, change log, and snapshots all write via
+  `<path>.tmp` + `os.replace`. A killed process leaves the prior file
+  intact — never half-written or corrupted.
+- **Strict universe by default**: any failed `list_tickers` segment
+  raises `PartialUniverseError`. Without this, a transient API blip
+  on (e.g.) the CS pull would leave thousands of stocks absent from
+  today's universe — the diff layer would then emit false
+  `deactivated` rows for all of them. Use `--allow-partial` only if
+  you've separately verified the impact is acceptable.
+- **Cache-first event lookup**: a precomputed `_EventCache` over
+  `ticker_events.parquet` short-circuits ~80% of API calls on the
+  daily run. Lookups are O(1) (dict-backed).
+- **Event date normalization**: `event_date` is always
+  `YYYY-MM-DD`, regardless of whether it came from the cache (a
+  `Timestamp`) or the API (an ISO datetime string). Ensures the
+  dedupe key is stable across runs and sources.
+
+### Recommended bootstrap sequence
+
+```bash
+# 1) Populate the events cache (fills ticker_events.parquet for tickers
+#    in your price data — ~8 min at unlimited rate).
+python -m agora.download events
+
+# 2) Bootstrap the master with full historical rename context (cache-fed,
+#    fast — ~5 min).
+python -m agora.download security-master --full-event-backfill
+
+# 3) Daily ongoing — incremental diffs only, ~20-30s with warm cache.
+python -m agora.download security-master
+```
 
 ---
 

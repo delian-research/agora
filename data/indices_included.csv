@@ -1,0 +1,319 @@
+﻿ticker,name,market,locale,active,source_feed,type
+I:TNX,Cboe Interest Rate 10 Year T Note,indices,us,TRUE,CboeGlobalIndicesCGI,Macro
+I:VIX,Cboe Volatility Index,indices,us,TRUE,CboeGlobalIndicesMain,Macro
+I:SIXC,Communication Services Select Sector Index,indices,us,TRUE,CboeGlobalIndicesMain,Industry
+I:SIXY,Consumer Discretionary Select Sector Index,indices,us,TRUE,CboeGlobalIndicesMain,Industry
+I:SIXR,Consumer Staples Select Sector Index,indices,us,TRUE,CboeGlobalIndicesMain,Industry
+I:A1BSC,Dow Jones Americas Basic Materials Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:A1NCY,Dow Jones Americas Consumer Goods Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:A1CYC,Dow Jones Americas Consumer Services Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:A1FIN,Dow Jones Americas Financials Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:A1HCR,Dow Jones Americas Health Care Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:A1DOW,Dow Jones Americas Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:A1IDU,Dow Jones Americas Industrials Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:A1ENE,Dow Jones Americas Oil & Gas Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:A1TEC,Dow Jones Americas Technology Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:A1TLS,Dow Jones Americas Telecommunications Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:A1UTI,Dow Jones Americas Utilities Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJTBAKT,Dow Jones Banks Titans 30 Index TR (USD),indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJTBAST,Dow Jones Basic Resources Titans 30 Index TR (USD),indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJTFVST,Dow Jones Financial Services Titans 30 Index TR (USD),indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJI,Dow Jones Industrial Average,indices,us,TRUE,CMEMarketDataPlatformDowJones,Broad
+I:DJTINNT,Dow Jones Insurance Titans 30 Index TR (USD),indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJTENGT,Dow Jones Oil & Gas Titans 30 Index TR (USD),indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJTREAT,Dow Jones Real Estate Titans 30 Index TR (USD),indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJTCGST,Dow Jones Travel & Leisure Titans 30 Index TR (USD),indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSAE,Dow Jones U.S. Aerospace & Defense Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSAS,Dow Jones U.S. Aerospace Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSAR,Dow Jones U.S. Airlines Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSAL,Dow Jones U.S. Aluminum Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSRA,Dow Jones U.S. Apparel Retailers Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSAG,Dow Jones U.S. Asset Managers Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSAT,Dow Jones U.S. Auto Parts Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSAP,Dow Jones U.S. Automobiles & Parts Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSAU,Dow Jones U.S. Automobiles Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSBK,Dow Jones U.S. Banks Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSBKT,Dow Jones U.S. Banks Total Return Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSBM,Dow Jones U.S. Basic Materials Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSBMT,Dow Jones U.S. Basic Materials Total Return Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSBS,Dow Jones U.S. Basic Resources Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSBV,Dow Jones U.S. Beverages Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSBT,Dow Jones U.S. Biotechnology Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSBTT,Dow Jones U.S. Biotechnology Total Return Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSDB,Dow Jones U.S. Brewers Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DW25NTR,Dow Jones U.S. Broad Stock Mark,indices,us,TRUE,CMEMarketDataPlatformDowJones,Broad
+I:DW25,Dow Jones U.S. Broad Stock Market Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Broad
+I:DW25T,Dow Jones U.S. Broad Stock Market Total Return Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Broad
+I:DJUSBC,Dow Jones U.S. Broadcasting & Entertainment Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSRB,Dow Jones U.S. Broadline Retailers Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSBD,Dow Jones U.S. Building Materials & Fixtures Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSIV,Dow Jones U.S. Business Support Services Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSBE,Dow Jones U.S. Business Training & Employment Agencies Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSCH,Dow Jones U.S. Chemicals Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSCF,Dow Jones U.S. Clothing & Accessories Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSHR,Dow Jones U.S. Commercial Vehicles & Trucks Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSCC,Dow Jones U.S. Commodity Chemicals Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSCR,Dow Jones U.S. Computer Hardware Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSDV,Dow Jones U.S. Computer Services Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSCN,Dow Jones U.S. Construction & Materials Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSSF,Dow Jones U.S. Consumer Finance Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSNC,Dow Jones U.S. Consumer Goods Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSNCT,Dow Jones U.S. Consumer Goods Total Return Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSCYC,Dow Jones U.S. Consumer Services Capped Index (USD),indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSCYCT,Dow Jones U.S. Consumer Services Capped Index (USD) TR,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSCY,Dow Jones U.S. Consumer Services Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSCYT,Dow Jones U.S. Consumer Services Total Return Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSCP,Dow Jones U.S. Containers & Packaging Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSVE,Dow Jones U.S. Conventional Electricity Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSDN,Dow Jones U.S. Defense Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSAF,Dow Jones U.S. Delivery Services Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSVN,Dow Jones U.S. Distillers & Vintners Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSID,Dow Jones U.S. Diversified Industrials Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSDT,Dow Jones U.S. Diversified REITs Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSDIV,Dow Jones U.S. Dividend 100 Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Style
+I:DJUSDIVT,Dow Jones U.S. Dividend 100 Total Return Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSRD,Dow Jones U.S. Drug Retailers Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSHD,Dow Jones U.S. Durable Household Products Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSEC,Dow Jones U.S. Electrical Components & Equipment Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSEU,Dow Jones U.S. Electricity Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSEE,Dow Jones U.S. Electronic & Electrical Equipment Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSAI,Dow Jones U.S. Electronic Equipment Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSOS,Dow Jones U.S. Exploration & Production Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSFA,Dow Jones U.S. Financial Administration Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSFV,Dow Jones U.S. Financial Services Index (USD),indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSFVT,Dow Jones U.S. Financial Services Index TR (USD),indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSGF,Dow Jones U.S. Financial Services Sector Index (USD),indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSFI,Dow Jones U.S. Financial Services Supersector Index (USD),indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSFNC,Dow Jones U.S. Financials Capped Index (USD),indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSFNCT,Dow Jones U.S. Financials Capped Index (USD) TR,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSFN,Dow Jones U.S. Financials Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSFNT,Dow Jones U.S. Financials Total Return Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSFC,Dow Jones U.S. Fixed Line Telecommunications Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSFB,Dow Jones U.S. Food & Beverage Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSDR,Dow Jones U.S. Food & Drug Retailers Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSFO,Dow Jones U.S. Food Producers Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSFP,Dow Jones U.S. Food Products Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSFD,Dow Jones U.S. Food Retailers & Wholesalers Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSFT,Dow Jones U.S. Footwear Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSFH,Dow Jones U.S. Furnishings Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSCA,Dow Jones U.S. Gambling Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSGU,Dow Jones U.S. Gas Distribution Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSUO,Dow Jones U.S. Gas Water & Multiutilities Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSGI,Dow Jones U.S. General Industrials Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSGT,Dow Jones U.S. General Retailers Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSPM,Dow Jones U.S. Gold Mining Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSGR,Dow Jones U.S. Growth Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Style
+I:DJUSMC,Dow Jones U.S. Health Care Equipment & Services Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSHC,Dow Jones U.S. Health Care Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSHP,Dow Jones U.S. Health Care Providers Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSHCT,Dow Jones U.S. Health Care Total Return Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSHV,Dow Jones U.S. Heavy Construction Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJTSAB,Dow Jones U.S. High Beta Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Style
+I:DJTLMO,Dow Jones U.S. High Momentum Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Style
+I:DJTLMOT,Dow Jones U.S. High Momentum Total Return Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSHB,Dow Jones U.S. Home Construction Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSHI,Dow Jones U.S. Home Improvement Retailers Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSHL,Dow Jones U.S. Hotel & Lodging REITs Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSLG,Dow Jones U.S. Hotels Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSHG,Dow Jones U.S. Household Goods & Home Construction Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUS,Dow Jones U.S. Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Broad
+I:DJUSNTR,Dow Jones U.S. Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Broad
+I:DJUSIO,Dow Jones U.S. Industrial & Office REITs Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSIQ,Dow Jones U.S. Industrial Engineering Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSIG,Dow Jones U.S. Industrial Goods & Services Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSFE,Dow Jones U.S. Industrial Machinery Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSIM,Dow Jones U.S. Industrial Metals & Mining Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSDS,Dow Jones U.S. Industrial Suppliers Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSIT,Dow Jones U.S. Industrial Transportation Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSIN,Dow Jones U.S. Industrials Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSINT,Dow Jones U.S. Industrials Total Return Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSIB,Dow Jones U.S. Insurance Brokers Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSIR,Dow Jones U.S. Insurance Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSOL,Dow Jones U.S. Integrated Oil & Gas Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSSB,Dow Jones U.S. Investment Services Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSST,Dow Jones U.S. Iron & Steel Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSGL,Dow Jones U.S. Large-Cap Growth Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Style
+I:DWLGT,Dow Jones U.S. Large-Cap Growth Total Stock Market Total Return Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Style
+I:DJUSL,Dow Jones U.S. Large-Cap Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJULTC,Dow Jones U.S. Large-Cap Technology Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DWLT,Dow Jones U.S. Large-Cap Total Stock Market Total Return Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Size
+I:DJUSVL,Dow Jones U.S. Large-Cap Value Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Style
+I:DWLVT,Dow Jones U.S. Large-Cap Value Total Stock Market Total Return Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Style
+I:DJUSLE,Dow Jones U.S. Leisure Goods Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSIL,Dow Jones U.S. Life Insurance Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJTLAB,Dow Jones U.S. Low Beta Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Style
+I:DJTSMO,Dow Jones U.S. Low Momentum Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Style
+I:DJUSLW,Dow Jones U.S. Low-Cap Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Size
+I:DJUSMT,Dow Jones U.S. Marine Transportation Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSAV,Dow Jones U.S. Media Agencies Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSME,Dow Jones U.S. Media Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSAM,Dow Jones U.S. Medical Equipment Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSMS,Dow Jones U.S. Medical Supplies Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSGM,Dow Jones U.S. Mid-Cap Growth Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Style
+I:DJUSM,Dow Jones U.S. Mid-Cap Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Size
+I:DWMT,Dow Jones U.S. Mid-Cap Total Stock Market Total Return Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Size
+I:DJUSVM,Dow Jones U.S. Mid-Cap Value Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Style
+I:DJUSMG,Dow Jones U.S. Mining Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSWC,Dow Jones U.S. Mobile Telecommunications Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSWCT,Dow Jones U.S. Mobile Telecommunications Total Return Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSMF,Dow Jones U.S. Mortgage Finance Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSMR,Dow Jones U.S. Mortgage REITs Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSMU,Dow Jones U.S. Multiutilities Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSHN,Dow Jones U.S. Nondurable Household Products Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSNF,Dow Jones U.S. Nonferrous Metals Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSIX,Dow Jones U.S. Nonlife Insurance Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSEN,Dow Jones U.S. Oil & Gas Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSOG,Dow Jones U.S. Oil & Gas Producers Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSENT,Dow Jones U.S. Oil & Gas Total Return Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSOI,Dow Jones U.S. Oil Equipment & Services Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSOQ,Dow Jones U.S. Oil Equipment Services & Distribution Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSOQT,Dow Jones U.S. Oil Equipment Services & Distribution Total Return Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSNG,Dow Jones U.S. Personal & Household Goods Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSPG,Dow Jones U.S. Personal Goods Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSCM,Dow Jones U.S. Personal Products Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSPN,Dow Jones U.S. Pharmaceuticals & Biotechnology Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSPR,Dow Jones U.S. Pharmaceuticals Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSPRT,Dow Jones U.S. Pharmaceuticals Total Return Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSPL,Dow Jones U.S. Pipelines Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSIP,Dow Jones U.S. Property & Casualty Insurance Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSPB,Dow Jones U.S. Publishing Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSRR,Dow Jones U.S. Railroads Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSR10T,Dow Jones U.S. Real Estate Dail,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSRE,Dow Jones U.S. Real Estate Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSRH,Dow Jones U.S. Real Estate Investment & Services Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSRI,Dow Jones U.S. Real Estate Investment Trusts Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSES,Dow Jones U.S. Real Estate Services Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSRET,Dow Jones U.S. Real Estate Total Return Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSRP,Dow Jones U.S. Recreational Products Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSRQ,Dow Jones U.S. Recreational Services Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSIU,Dow Jones U.S. Reinsurance Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJTLSV,Dow Jones U.S. Relative Value Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Style
+I:DJTLSVT,Dow Jones U.S. Relative Value Total Return Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Style
+I:DJUSRN,Dow Jones U.S. Residential REITs Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSRU,Dow Jones U.S. Restaurants & Bars Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSRT,Dow Jones U.S. Retail Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSRL,Dow Jones U.S. Retail REITs Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJSASDCT,Dow Jones U.S. Select Aerospace,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJSASDC,Dow Jones U.S. Select Aerospace,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJSASD,Dow Jones U.S. Select Aerospace & Defense Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJSASDT,Dow Jones U.S. Select Aerospace & Defense Total Return Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJDVP,Dow Jones U.S. Select Dividend Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Style
+I:DJDVY,Dow Jones U.S. Select Dividend Total Return Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Style
+I:DJSHCP,Dow Jones U.S. Select Health Care Providers Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJSHCPT,Dow Jones U.S. Select Health Care Providers Total Return Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJSHMB,Dow Jones U.S. Select Home Construction Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJSHMBT,Dow Jones U.S. Select Home Construction Total Return Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJSINS,Dow Jones U.S. Select Insurance Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJSINST,Dow Jones U.S. Select Insurance Total Return Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJSINV,Dow Jones U.S. Select Investment Services Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJSINVT,Dow Jones U.S. Select Investment Services Total Return Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJSMDQ,Dow Jones U.S. Select Medical Equipment Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJSMDQT,Dow Jones U.S. Select Medical Equipment Total Return Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJSOES,Dow Jones U.S. Select Oil Equipment & Services Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJSOEST,Dow Jones U.S. Select Oil Equipment & Services Total Return Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJSOEP,Dow Jones U.S. Select Oil Exploration & Production Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJSOEPT,Dow Jones U.S. Select Oil Exploration & Production Total Return Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJSPHM,Dow Jones U.S. Select Pharmaceuticals Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJSPHMT,Dow Jones U.S. Select Pharmaceuticals Total Return Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DWRSF,Dow Jones U.S. Select Real Estate Securities Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJSRBK,Dow Jones U.S. Select Regional Banks Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJSRBKT,Dow Jones U.S. Select Regional Banks Total Return Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DWRTF,Dow Jones U.S. Select REIT Index (USD),indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DWRTFT,Dow Jones U.S. Select REIT Total Return Index (USD),indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJSTEL,Dow Jones U.S. Select Telecommunications Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJSTELT,Dow Jones U.S. Select Telecommunications Total Return Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSSC,Dow Jones U.S. Semiconductors Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSSCT,Dow Jones U.S. Semiconductors Total Return Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJTSSV,Dow Jones U.S. Short Relative Value Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Style
+I:DJUSGS,Dow Jones U.S. Small-Cap Growth Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Style
+I:DJUSS,Dow Jones U.S. Small-Cap Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Size
+I:DWST,Dow Jones U.S. Small-Cap Total Stock Market Total Return Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Size
+I:DJUSVS,Dow Jones U.S. Small-Cap Value Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Style
+I:DJUSSD,Dow Jones U.S. Soft Drinks Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSSV,Dow Jones U.S. Software & Computer Services Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSSW,Dow Jones U.S. Software Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSCS,Dow Jones U.S. Specialized Consumer Services Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSCX,Dow Jones U.S. Specialty Chemicals Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSSP,Dow Jones U.S. Specialty Finance Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSSR,Dow Jones U.S. Specialty REITs Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSRS,Dow Jones U.S. Specialty Retailers Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSIS,Dow Jones U.S. Support Services Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSTCC,Dow Jones U.S. Technology Capped Index (USD),indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSTQ,Dow Jones U.S. Technology Hardware & Equipment Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSTC,Dow Jones U.S. Technology Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSTCCT,Dow Jones U.S. Technology Index Capped (USD) TR,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSTCT,Dow Jones U.S. Technology Total Return Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSCT,Dow Jones U.S. Telecommunications Equipment Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSTL,Dow Jones U.S. Telecommunications Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSTLT,Dow Jones U.S. Telecommunications Total Return Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJTLQU,Dow Jones U.S. Thematic Long Quality Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Style
+I:DJTLQUT,Dow Jones U.S. Thematic Long Quality Total Return Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Style
+I:DJTLSS,Dow Jones U.S. Thematic Long Size Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Style
+I:DJTLSST,Dow Jones U.S. Thematic Long Size Total Return Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Style
+I:DJTMNAB,Dow Jones U.S. Thematic Market Neutral Low Beta Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Style
+I:DJTMNMO,Dow Jones U.S. Thematic Market Neutral Momentum Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Style
+I:DJTMNQU,Dow Jones U.S. Thematic Market Neutral Quality Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Style
+I:DJTMNSS,Dow Jones U.S. Thematic Market Neutral Size Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Style
+I:DJTMNSV,Dow Jones U.S. Thematic Market Neutral Value Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Style
+I:DJTSQU,Dow Jones U.S. Thematic Short Quality Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Style
+I:DJTSSS,Dow Jones U.S. Thematic Short Size Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Style
+I:DJUSTB,Dow Jones U.S. Tobacco Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSTP,Dow Jones U.S. Top-Cap Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Size
+I:DWCFT,Dow Jones U.S. Total Stock Market Total Return Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Broad
+I:DJUSTY,Dow Jones U.S. Toys Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSCG,Dow Jones U.S. Travel & Leisure Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSTT,Dow Jones U.S. Travel & Tourism Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSTK,Dow Jones U.S. Trucking Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSUT,Dow Jones U.S. Utilities Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSUTT,Dow Jones U.S. Utilities Total Return Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSVA,Dow Jones U.S. Value Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSPC,Dow Jones U.S. Waste & Disposal Services Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:DJUSWU,Dow Jones U.S. Water Index,indices,us,TRUE,CMEMarketDataPlatformDowJones,Thematic
+I:DJTUTST,Dow Jones Utilities Titans 30 Index TR (USD),indices,us,TRUE,CMEMarketDataPlatformDowJones,Industry
+I:SIXE,Energy Select Sector Index,indices,us,TRUE,CboeGlobalIndicesMain,Industry
+I:SIXM,Financial Select Sector Index,indices,us,TRUE,CboeGlobalIndicesMain,Industry
+I:SIXV,Health Care Select Sector Index,indices,us,TRUE,CboeGlobalIndicesMain,Industry
+I:SIXI,Industrials Select Sector Index,indices,us,TRUE,CboeGlobalIndicesMain,Industry
+I:SIXB,Materials Select Sector Index,indices,us,TRUE,CboeGlobalIndicesMain,Industry
+I:MSACUSDP,Morningstar Asia Pacific PR USD,indices,us,TRUE,CboeGlobalIndicesMSTAR,Geographic
+I:MSEXPOPU,Morningstar Exponential Technologies PR USD,indices,us,TRUE,CboeGlobalIndicesMSTAR,Industry
+I:MUNR,Morningstar Global Upstream Natural Resources PR USD,indices,us,TRUE,CboeGlobalIndicesMSTAR,Thematic
+I:MSILUSDP,Morningstar Israel PR USD,indices,us,TRUE,CboeGlobalIndicesMSTAR,Geographic
+I:MSMEUSDP,Morningstar Middle East & Africa PR USD,indices,us,TRUE,CboeGlobalIndicesMSTAR,Geographic
+I:MLCP,Morningstar US Large Cap PR USD,indices,us,TRUE,CboeGlobalIndicesMSTAR,Size
+I:MLCPT,Morningstar US Large Cap TR USD,indices,us,TRUE,CboeGlobalIndicesMSTAR,Size
+I:MUMCBGPU,Morningstar US Mid Cap Broad Growth PR USD,indices,us,TRUE,CboeGlobalIndicesMSTAR,Style
+I:MUMCBVPU,Morningstar US Mid Cap Broad Value PR USD,indices,us,TRUE,CboeGlobalIndicesMSTAR,Style
+I:MMCP,Morningstar US Mid Cap PR USD,indices,us,TRUE,CboeGlobalIndicesMSTAR,Size
+I:MMCPT,Morningstar US Mid Cap TR USD,indices,us,TRUE,CboeGlobalIndicesMSTAR,Size
+I:MSCP,Morningstar US Small Cap PR USD,indices,us,TRUE,CboeGlobalIndicesMSTAR,Size
+I:MSCPT,Morningstar US Small Cap TR USD,indices,us,TRUE,CboeGlobalIndicesMSTAR,Size
+I:MWMF,Morningstar Wide Moat Focus PR USD,indices,us,TRUE,CboeGlobalIndicesMSTAR,Thematic
+I:MWMFT,Morningstar Wide Moat Focus Total Return Index,indices,us,TRUE,CboeGlobalIndicesMSTAR,Thematic
+I:NQBR,NASDAQ Brazil Index,indices,us,TRUE,NasdaqGIDS,Geographic
+I:NQBRT,NASDAQ Brazil TR Index,indices,us,TRUE,NasdaqGIDS,Geographic
+I:COMP,NASDAQ Composite,indices,us,TRUE,NasdaqGIDS,Broad
+I:XCMP,NASDAQ Composite Total Return,indices,us,TRUE,NasdaqGIDS,Broad
+I:NQDMASIA,NASDAQ DM Asia Index,indices,us,TRUE,NasdaqGIDS,Geographic
+I:NQDMASIAT,NASDAQ DM Asia TR Index,indices,us,TRUE,NasdaqGIDS,Geographic
+I:NQDMEU,NASDAQ DM Europe Index,indices,us,TRUE,NasdaqGIDS,Geographic
+I:NQEMASIA,NASDAQ EM Asia Index,indices,us,TRUE,NasdaqGIDS,Geographic
+I:NQEMASIAT,NASDAQ EM Asia TR Index,indices,us,TRUE,NasdaqGIDS,Geographic
+I:NQEUT,NASDAQ Europe TR Index,indices,us,TRUE,NasdaqGIDS,Geographic
+I:GSOX,Nasdaq Global Semiconductor Index,indices,us,TRUE,NasdaqGIDS,Industry
+I:GSOXTR,Nasdaq Global Semiconductor Total Return Index,indices,us,TRUE,NasdaqGIDS,Industry
+I:NQTW,NASDAQ Taiwan Index,indices,us,TRUE,NasdaqGIDS,Geographic
+I:NQTWT,NASDAQ Taiwan TR Index,indices,us,TRUE,NasdaqGIDS,Geographic
+I:NQGB,NASDAQ UK Index,indices,us,TRUE,NasdaqGIDS,Geographic
+I:NQGBT,NASDAQ UK TR Index,indices,us,TRUE,NasdaqGIDS,Geographic
+I:DVG,NASDAQ US Dividend Achievers Select Index,indices,us,TRUE,NasdaqGIDS,Style
+I:DVGTR,NASDAQ US Dividend Achievers Select Index TR,indices,us,TRUE,NasdaqGIDS,Style
+I:NDX,NASDAQ-100,indices,us,TRUE,NasdaqGIDS,Broad
+I:XNDX,NASDAQ-100 Total Return,indices,us,TRUE,NasdaqGIDS,Broad
+I:SIXRE,Real Estate Select Sector Index,indices,us,TRUE,CboeGlobalIndicesMain,Industry
+I:RUI,Russell 1000 Index,indices,us,TRUE,CboeGlobalIndicesFTSE,Broad
+I:RUT,Russell 2000 Index,indices,us,TRUE,CboeGlobalIndicesFTSE,Broad
+I:OEX,S&P 100,indices,us,TRUE,CboeGlobalIndicesMain,Broad
+I:SPX,Standard & Poor's 500,indices,us,TRUE,CboeGlobalIndicesMain,Broad
+I:SIXT,Technology Select Sector Index,indices,us,TRUE,CboeGlobalIndicesMain,Industry
+I:SIXU,Utilities Select Sector Index,indices,us,TRUE,CboeGlobalIndicesMain,Industry

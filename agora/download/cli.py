@@ -49,6 +49,17 @@ def cmd_events(args):
     )
 
 
+def cmd_security_master(args):
+    from .security_master import sync_security_master
+    sync_security_master(
+        output_dir=Path(args.output) / "reference" if args.output else None,
+        backfill_events=not args.no_events,
+        full_event_backfill=args.full_event_backfill,
+        write_dated_snapshot=not args.no_snapshot,
+        strict_universe=not args.allow_partial,
+    )
+
+
 def cmd_all(args):
     cmd_stocks(args)
     cmd_forex(args)
@@ -80,6 +91,40 @@ def _build_parser() -> argparse.ArgumentParser:
 
     sp = subparsers.add_parser("events", help="Download ticker events → security master (valid_from/valid_to)")
     sp.set_defaults(func=cmd_events)
+
+    sp = subparsers.add_parser(
+        "security-master",
+        help="Sync security master + append timestamped change log",
+    )
+    sp.add_argument(
+        "--no-events",
+        action="store_true",
+        help="Skip ticker_events backfill on additions / detected changes",
+    )
+    sp.add_argument(
+        "--full-event-backfill",
+        action="store_true",
+        help=(
+            "One-shot: pull get_ticker_events for every identity in the master, "
+            "not just changed ones. Idempotent against the existing change log. "
+            "~10K API calls — slow."
+        ),
+    )
+    sp.add_argument(
+        "--no-snapshot",
+        action="store_true",
+        help="Skip writing the dated raw-pull snapshot under reference/snapshots/",
+    )
+    sp.add_argument(
+        "--allow-partial",
+        action="store_true",
+        help=(
+            "Continue when one or more (market, type) list_tickers calls fail. "
+            "Default is to abort the sync on any failure to prevent the diff "
+            "layer from emitting spurious deactivation rows for missing segments."
+        ),
+    )
+    sp.set_defaults(func=cmd_security_master)
 
     sp = subparsers.add_parser("all", help="Download everything")
     sp.add_argument("--start-year", type=int, default=2021)

@@ -40,6 +40,11 @@ access, security master with FIGI-linked ticker history.
 - **Security master** — `composite_figi`-linked ticker history; resolves
   symbol changes (FB → META) and stitches continuous price series across
   renames.
+- **Live security master + change log** — incremental sync that produces
+  a current-state snapshot (`security_master.parquet`) plus an
+  append-only timestamped change log (`security_master_changes.parquet`).
+  Captures additions, deactivations, reactivations, field changes, and
+  authoritative ticker renames. Idempotent; safe to run on cron.
 
 ## Install
 
@@ -84,7 +89,7 @@ git push -u origin feat/my-thing
 gh pr create --fill        # base defaults to dev
 ```
 
-CI (the 38-test pytest suite) runs on every PR and on every push to
+CI (the pytest suite, ~200 tests) runs on every PR and on every push to
 `dev` or `main`. Branch protection on `dev` requires the `test` check
 to pass before the merge button enables. Direct pushes to either
 protected branch are blocked.
@@ -110,6 +115,9 @@ python -m agora.download forex
 python -m agora.download reference
 python -m agora.download events
 
+# Sync the live security master + append timestamped change log
+python -m agora.download security-master
+
 # Re-download from scratch (ignore checkpoints)
 python -m agora.download --no-resume all
 ```
@@ -118,14 +126,43 @@ Result lands under `data/`:
 
 ```
 data/
-├── stocks/daily/{2021..2026}.parquet      # ~306 MB, ~13.7M rows
-├── forex/daily_usd.parquet                 # ~3 MB, 116 *USD pairs
+├── indices_included.csv                     # editable allowlist for index scope
+├── stocks/daily/{2021..2026}.parquet        # ~306 MB, ~13.7M rows
+├── forex/daily_usd.parquet                  # ~3 MB, 116 *USD pairs
 └── reference/
-    ├── tickers.parquet                      # 13,715 active tickers
+    ├── tickers.parquet                      # raw list_tickers snapshot
     ├── exchanges.parquet
     ├── splits.parquet
     ├── dividends.parquet                    # ~2M rows
-    └── ticker_events.parquet                # security master
+    ├── ticker_events.parquet                # rename history (FIGI bridge)
+    ├── security_master.parquet              # current state, one row per identity
+    ├── security_master_changes.parquet      # append-only timestamped change log
+    └── snapshots/tickers_<YYYY-MM-DD>.parquet  # dated raw-pull archive
+```
+
+### Security master sync
+
+```bash
+# One-shot: pull events for every identity (use after the bootstrap)
+python -m agora.download security-master --full-event-backfill
+
+# Daily incremental — fast (~20-30s with warm cache), idempotent
+python -m agora.download security-master
+```
+
+Edit `data/indices_included.csv` to control which indices are tracked
+(must have a `ticker` column). The change log is append-only — each
+sync that detects additions, deactivations, reactivations, field
+changes, or authoritative renames appends rows tagged with the run's
+UUID and `detected_at` timestamp.
+
+```python
+from agora import FlatFileLoader
+loader = FlatFileLoader()
+
+loader.get_security_master(active_only=True, ticker_type="ETF")
+loader.audit_security("BBG000B9XRY4")            # full history for AAPL
+loader.resolve_security(ticker="META", as_of="2020-06-01")  # → resolves to FB
 ```
 
 ### Read local Parquet (fast, no rate limits)
