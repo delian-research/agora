@@ -98,7 +98,7 @@ def _download_ticker_events(
     skipped = 0
     errors = 0
 
-    for i, ticker in enumerate(target_tickers):
+    for ticker in target_tickers:
         ckpt_key = f"event:{ticker}"
         if resume and checkpoint.is_done(ckpt_key):
             skipped += 1

@@ -12,14 +12,13 @@ secrets and never makes a real network call.
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pandas as pd
 import pytest
 
 from agora import equities
 from agora.equities import market
-
 
 # ── Fixtures ────────────────────────────────────────────────────────
 

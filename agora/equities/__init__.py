@@ -36,6 +36,14 @@ Examples:
 # ── Subpackage exports ──────────────────────────────────────────────
 from agora.equities import cax, company
 
+# ── Company (stubs) ─────────────────────────────────────────────────
+from agora.equities.company import (
+    get_earnings,
+    get_industry,
+    get_major_news,
+    get_sector,
+)
+
 # ── Market ──────────────────────────────────────────────────────────
 from agora.equities.market import (
     get_daily_prices,
@@ -51,14 +59,6 @@ from agora.equities.reference import (
     get_exchange,
     get_market_cap,
     get_shares_out,
-)
-
-# ── Company (stubs) ─────────────────────────────────────────────────
-from agora.equities.company import (
-    get_earnings,
-    get_industry,
-    get_major_news,
-    get_sector,
 )
 
 __all__ = [

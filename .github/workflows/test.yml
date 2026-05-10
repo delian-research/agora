@@ -1,9 +1,12 @@
-# Continuous integration: run the pytest smoke suite on every push and PR.
+# Continuous integration: lint, type-check, and run the pytest suite on every
+# push and PR.
 #
-# What this catches:
-#   - Import-graph regressions (the audit's BUG-1, 2, 4-7, 10 surface)
-#   - WebSocket structural regressions (channel routing, dispatch)
-#   - Anything covered by the 38 tests in tests/
+# Gates:
+#   - ruff   (lint)        — fail-on-finding
+#   - mypy   (type-check)  — fail-on-finding (curated subset only)
+#   - pytest (suite + cov) — fail-on-test-failure; coverage reported but
+#                            not yet enforced via --cov-fail-under (added
+#                            in a follow-up PR once a baseline is set).
 #
 # What this does NOT do:
 #   - Run live-data tests (test_loaders.py auto-skips when data/ is absent,
@@ -57,5 +60,17 @@ jobs:
       - name: Sync dependencies (incl. dev extras)
         run: uv sync --extra dev
 
-      - name: Run pytest
-        run: uv run pytest -v
+      - name: Lint (ruff)
+        run: uv run ruff check agora tests
+
+      - name: Type-check (mypy, curated subset)
+        # The curated subset matches pyproject.toml's mypy config target.
+        # Broaden to the whole package in a follow-up PR once download/
+        # and normalize/ are typed.
+        run: uv run mypy agora/equities agora/loaders agora/client.py agora/config.py agora/errors.py
+
+      - name: Run pytest with coverage
+        # Coverage floor is the current baseline (46% measured on dev as of
+        # this PR). Raise it in future PRs as test coverage grows — never
+        # let it drop. Tracked in dovs/2.Projects.md.
+        run: uv run pytest -v --cov=agora --cov-report=term-missing --cov-fail-under=45

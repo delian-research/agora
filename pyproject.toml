@@ -31,6 +31,9 @@ dependencies = [
 dev = [
     "pytest>=8.0",
     "pytest-mock>=3.12",
+    "pytest-cov>=5.0",
+    "ruff>=0.6",
+    "mypy>=1.10",
 ]
 
 [project.scripts]
@@ -51,4 +54,51 @@ filterwarnings = [
     # The shim intentionally warns; tests assert it does, but other tests
     # importing from the canonical path shouldn't see it.
     "ignore::DeprecationWarning:agora.loaders.s3",
+]
+
+# ── Ruff ────────────────────────────────────────────────────────────
+# High-signal lint bundle. Runs on agora/ and tests/.
+#   E  — pycodestyle errors      F  — pyflakes (unused imports etc.)
+#   I  — isort import ordering   B  — flake8-bugbear (real-bug patterns)
+#   UP — pyupgrade (idiomatic modern Python)
+[tool.ruff]
+target-version = "py313"
+line-length = 120
+extend-exclude = ["data", ".venv"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+# Allow typical test-style ignores (e.g., long lines in fixtures).
+per-file-ignores = { "tests/*" = ["E501"] }
+
+# ── mypy ────────────────────────────────────────────────────────────
+# Permissive baseline. The CI step targets a curated subset; this config
+# governs what mypy does when invoked over those paths.
+[tool.mypy]
+python_version = "3.13"
+ignore_missing_imports = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+# Start permissive — tighten in follow-up PRs.
+strict = false
+check_untyped_defs = false
+disallow_untyped_defs = false
+
+# ── coverage ────────────────────────────────────────────────────────
+[tool.coverage.run]
+source = ["agora"]
+branch = true
+omit = [
+    "agora/models.py",         # empty placeholder
+    "agora/loaders/s3.py",     # deprecation shim
+]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
+exclude_lines = [
+    "pragma: no cover",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+    "if __name__ == .__main__.:",
 ]

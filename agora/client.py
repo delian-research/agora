@@ -13,7 +13,6 @@ Examples:
 from __future__ import annotations
 
 import logging
-from typing import Optional
 
 from .config import MassiveConfig
 from .loaders.rest import MassiveDataApi
@@ -34,7 +33,7 @@ class MassiveClient:
         self.rest: MassiveDataApi = MassiveDataApi(config)
 
     @classmethod
-    def from_env(cls, *, api_key: Optional[str] = None) -> "MassiveClient":
+    def from_env(cls, *, api_key: str | None = None) -> MassiveClient:
         """Build a client with config loaded from the environment.
 
         Args:
@@ -71,7 +70,7 @@ class MassiveClient:
         except Exception:
             logger.debug("close: rest.close() raised", exc_info=True)
 
-    def __enter__(self) -> "MassiveClient":
+    def __enter__(self) -> MassiveClient:
         return self
 
     def __exit__(self, exc_type, exc, tb) -> None:
@@ -80,7 +79,7 @@ class MassiveClient:
 
 # ── Module-level singleton ──────────────────────────────────────────
 
-_client: Optional[MassiveClient] = None
+_client: MassiveClient | None = None
 
 
 def get_client() -> MassiveClient:

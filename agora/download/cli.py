@@ -5,8 +5,6 @@ import logging
 import sys
 from pathlib import Path
 
-from .config import DATA_DIR
-
 
 def setup_logging(verbose: bool = False):
     level = logging.DEBUG if verbose else logging.INFO

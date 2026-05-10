@@ -11,8 +11,8 @@ The returned DataFrame columns mirror the Massive REST schema:
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Sequence
 
 import pandas as pd
 

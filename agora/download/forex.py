@@ -73,7 +73,7 @@ def download_forex(
     completed = 0
     skipped = 0
 
-    for i, ticker in enumerate(pairs):
+    for ticker in pairs:
         if resume and checkpoint.is_done(ticker):
             skipped += 1
             continue

@@ -15,7 +15,6 @@ import warnings
 
 import pytest
 
-
 PUBLIC_MODULES = [
     "agora",
     "agora.config",
@@ -101,8 +100,8 @@ def test_top_level_all_matches_actual_exports() -> None:
 
 def test_subpackage_facades() -> None:
     """`agora.loaders` and `agora.adapters` should also re-export their classes."""
-    from agora.loaders import FlatFileLoader, MassiveDataApi, WebSocketStreamer
     from agora.adapters import get_prices, get_returns
+    from agora.loaders import FlatFileLoader, MassiveDataApi, WebSocketStreamer
 
     assert FlatFileLoader.__name__ == "FlatFileLoader"
     assert MassiveDataApi.__name__ == "MassiveDataApi"
@@ -136,8 +135,8 @@ def test_s3_shim_warns_and_aliases() -> None:
 
     with warnings.catch_warnings(record=True) as captured:
         warnings.simplefilter("always")
-        from agora.loaders.s3 import FlatFileLoader as Shimmed
         from agora.loaders.parquet import FlatFileLoader as Canonical
+        from agora.loaders.s3 import FlatFileLoader as Shimmed
 
     deps = [w for w in captured if issubclass(w.category, DeprecationWarning)]
     assert len(deps) == 1

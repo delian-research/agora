@@ -46,37 +46,26 @@ Examples:
 
 __version__ = "0.1.0"
 
-# ── Client / Config ─────────────────────────────────────────────────
+from agora import equities
+from agora.adapters import get_prices, get_returns
 from agora.client import MassiveClient, get_client, reset_client
 from agora.config import MassiveConfig
-
-# ── Errors ──────────────────────────────────────────────────────────
+from agora.download import (
+    download_forex,
+    download_reference,
+    download_stocks,
+    download_ticker_events,
+)
 from agora.errors import (
     MassiveAPIError,
     MassiveAuthenticationError,
     MassiveDataNotFoundError,
     MassiveRateLimitError,
 )
-
-# ── Loaders (live + offline + streaming) ────────────────────────────
 from agora.loaders import (
     FlatFileLoader,
     MassiveDataApi,
     WebSocketStreamer,
-)
-
-# ── Asset-class facades ─────────────────────────────────────────────
-from agora import equities
-
-# ── Analytics adapters ──────────────────────────────────────────────
-from agora.adapters import get_prices, get_returns
-
-# ── Bulk download ───────────────────────────────────────────────────
-from agora.download import (
-    download_forex,
-    download_reference,
-    download_stocks,
-    download_ticker_events,
 )
 
 __all__ = [

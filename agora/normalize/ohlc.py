@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 import pandas as pd
 
 
 def normalize_grouped_daily_results(payload: Mapping[str, Any], date: str) -> pd.DataFrame:
-    rows: list[Dict[str, Any]] = []
+    rows: list[dict[str, Any]] = []
     for item in payload.get("results", []) or []:
         ts_ms = item.get("t")
         rows.append(
@@ -91,7 +92,7 @@ _AGG_COLUMNS = [
 
 
 def normalize_aggregate_results(payload: Mapping[str, Any], ticker: str) -> pd.DataFrame:
-    rows: list[Dict[str, Any]] = []
+    rows: list[dict[str, Any]] = []
     for item in payload.get("results", []) or []:
         ts_ms = item.get("t")
         ts_utc = pd.to_datetime(ts_ms, unit="ms", utc=True, errors="coerce")
@@ -120,7 +121,7 @@ def normalize_aggregate_results(payload: Mapping[str, Any], ticker: str) -> pd.D
 
 
 def normalize_previous_day_results(payload: Mapping[str, Any], fallback_ticker: str) -> pd.DataFrame:
-    rows: list[Dict[str, Any]] = []
+    rows: list[dict[str, Any]] = []
 
     for item in payload.get("results", []) or []:
         ts_ms = item.get("t")

@@ -13,7 +13,6 @@ import pytest
 
 from agora.loaders.parquet import FlatFileLoader
 
-
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = REPO_ROOT / "data"
 STOCK_DIR = DATA_DIR / "stocks" / "daily"
