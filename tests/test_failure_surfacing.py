@@ -14,7 +14,6 @@ import logging
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
-import pandas as pd
 import pytest
 
 from agora import equities
@@ -65,7 +64,6 @@ class TestEquitiesPricesPartialFailure:
             df = equities.get_daily_prices(
                 ["AAPL", "BADD", "MSFT"],
                 start="2025-01-01", end="2025-01-02",
-                source="rest",
                 client=fake,
             )
 
@@ -89,7 +87,6 @@ class TestEquitiesPricesPartialFailure:
             equities.get_daily_prices(
                 ["AAPL", "BADD"],
                 start="2025-01-01", end="2025-01-02",
-                source="rest",
                 client=fake,
                 strict=True,
             )
@@ -103,7 +100,6 @@ class TestEquitiesPricesPartialFailure:
         df = equities.get_daily_prices(
             ["BAD1", "BAD2"],
             start="2025-01-01", end="2025-01-02",
-            source="rest",
             client=fake,
         )
 
@@ -125,7 +121,6 @@ class TestEquitiesReturnsPartialFailure:
         df = equities.get_daily_returns(
             ["AAPL", "BADD"],
             start="2025-01-01", end="2025-01-02",
-            source="rest",
             client=fake,
         )
 
@@ -213,25 +208,7 @@ class TestAdapterPricesPartialFailure:
         assert df.attrs.get("failed_tickers") == ["BAD1", "BAD2"]
 
 
-# ── Sanity: parquet path is unaffected ──────────────────────────────
-
-
-class TestParquetPathDoesNotAddAttrs:
-    def test_parquet_source_no_attrs_when_no_failures(self) -> None:
-        # Build a tiny synthetic DataFrame and inject via patching.
-        # We don't have data/, so use a tmp dir.
-        import tempfile
-
-        with tempfile.TemporaryDirectory() as td:
-            stocks_dir = pd.Index([])  # placeholder
-            del stocks_dir
-            # Easier: just call with empty parquet store and confirm we
-            # get an empty df without failed_tickers attr.
-            df = equities.get_daily_prices(
-                ["AAPL"],
-                start="2099-01-01", end="2099-01-02",  # future range
-                source="parquet",
-                data_dir=td,
-            )
-            assert df.empty
-            assert "failed_tickers" not in df.attrs
+# Note: the prior `TestParquetPathDoesNotAddAttrs` class was removed when
+# `agora.equities` became API-only (no `source=` parameter). Downstream
+# packages that want a parquet-backed read should use
+# `agora.loaders.parquet.FlatFileLoader` directly.
