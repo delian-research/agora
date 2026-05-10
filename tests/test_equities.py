@@ -31,16 +31,18 @@ def test_equities_public_surface() -> None:
     expected = {
         # market
         "get_daily_prices", "get_daily_returns", "get_volume",
-        "get_daily_grouped", "get_snapshot",
+        "get_daily_grouped", "get_previous_close", "get_snapshot",
+        "get_last_trade", "get_last_quote",
+        "get_market_status", "get_market_holidays",
         # reference
         "get_tickers", "get_ticker_details",
         "get_ticker_types", "get_exchanges", "get_related_tickers",
-        # company classification (now implemented)
+        # company classification
         "get_industry", "get_sector",
         # company (still stubs — Benzinga)
         "get_major_news", "get_earnings",
         # subpackages
-        "cax", "company",
+        "cax", "company", "etf", "fundamentals", "short_data",
     }
     missing = expected - set(dir(equities))
     assert not missing, f"missing from agora.equities: {sorted(missing)}"
@@ -1116,3 +1118,418 @@ class TestGetRelatedTickers:
         ]
         df = equities.get_related_tickers("AAPL", client=fake)
         assert set(df["ticker"]) == {"MSFT", "GOOGL"}
+
+
+# ── Market state + live ticks (mocked REST) ─────────────────────────
+
+
+class FakeMarketStatus:
+    def __init__(self):
+        self.market = "open"
+        self.after_hours = False
+        self.early_hours = False
+        self.server_time = "2025-05-10T15:30:00-04:00"
+        self.exchanges = type("Exchanges", (), {"nasdaq": "open", "nyse": "open"})()
+        self.currencies = type("Currencies", (), {"fx": "open"})()
+
+
+class FakeMarketHoliday:
+    def __init__(self, date, name, exchange="NASDAQ", status="closed"):
+        self.date = date
+        self.name = name
+        self.exchange = exchange
+        self.status = status
+        self.open = None
+        self.close = None
+
+
+class TestGetMarketStatus:
+    def test_returns_series_with_core_fields(self) -> None:
+        fake = MagicMock()
+        fake.rest.get_market_status.return_value = FakeMarketStatus()
+        s = equities.get_market_status(client=fake)
+        assert s["market"] == "open"
+        assert s["after_hours"] is False
+        assert s["server_time"]
+
+
+class TestGetMarketHolidays:
+    def test_returns_dataframe(self) -> None:
+        fake = MagicMock()
+        fake.rest.get_market_holidays.return_value = [
+            FakeMarketHoliday("2024-12-25", "Christmas"),
+            FakeMarketHoliday("2024-11-28", "Thanksgiving"),
+        ]
+        df = equities.get_market_holidays(client=fake)
+        assert len(df) == 2
+        assert "Christmas" in df["name"].values
+        # Date column coerced to datetime
+        assert pd.api.types.is_datetime64_any_dtype(df["date"])
+
+    def test_empty_returns_schema_frame(self) -> None:
+        fake = MagicMock()
+        fake.rest.get_market_holidays.return_value = []
+        df = equities.get_market_holidays(client=fake)
+        assert df.empty
+        for col in ("date", "name", "exchange", "status"):
+            assert col in df.columns
+
+
+class FakeLastTrade:
+    def __init__(self, ticker="AAPL"):
+        self.ticker = ticker
+        self.price = 195.50
+        self.size = 100
+        self.exchange = 11
+        self.conditions = [12]
+        self.sip_timestamp = 1735689600_000_000_000
+        self.participant_timestamp = 1735689599_900_000_000
+        self.trf_timestamp = 0
+        self.id = "abc123"
+        self.sequence_number = 12345
+        self.tape = 3
+        self.correction = 0
+        self.fractional_size = None
+        self.trf_id = None
+
+
+class FakeLastQuote:
+    def __init__(self, ticker="AAPL"):
+        self.ticker = ticker
+        self.bid_price = 195.49
+        self.bid_size = 5
+        self.bid_exchange = 11
+        self.ask_price = 195.51
+        self.ask_size = 3
+        self.ask_exchange = 12
+        self.conditions = [0]
+        self.indicators = []
+        self.sip_timestamp = 1735689600_000_000_000
+        self.participant_timestamp = 1735689599_900_000_000
+        self.trf_timestamp = 0
+        self.sequence_number = 12345
+        self.tape = 3
+
+
+class TestGetLastTrade:
+    def test_returns_series_with_price_and_size(self) -> None:
+        fake = MagicMock()
+        fake.rest.get_last_trade.return_value = FakeLastTrade("AAPL")
+        s = equities.get_last_trade("AAPL", client=fake)
+        fake.rest.get_last_trade.assert_called_once_with("AAPL")
+        assert s["ticker"] == "AAPL"
+        assert s["price"] == 195.50
+        assert s["size"] == 100
+        # SIP timestamp surfaced as UTC
+        assert "sip_timestamp_utc" in s.index
+
+    def test_normalizes_ticker_case(self) -> None:
+        fake = MagicMock()
+        fake.rest.get_last_trade.return_value = FakeLastTrade("AAPL")
+        equities.get_last_trade("aapl", client=fake)
+        fake.rest.get_last_trade.assert_called_once_with("AAPL")
+
+    def test_empty_ticker_raises(self) -> None:
+        fake = MagicMock()
+        with pytest.raises(ValueError, match="non-empty"):
+            equities.get_last_trade("", client=fake)
+
+
+class TestGetLastQuote:
+    def test_returns_series_with_bid_ask(self) -> None:
+        fake = MagicMock()
+        fake.rest.get_last_quote.return_value = FakeLastQuote("AAPL")
+        s = equities.get_last_quote("AAPL", client=fake)
+        fake.rest.get_last_quote.assert_called_once_with("AAPL")
+        assert s["bid_price"] == 195.49
+        assert s["ask_price"] == 195.51
+        assert "sip_timestamp_utc" in s.index
+
+    def test_empty_ticker_raises(self) -> None:
+        fake = MagicMock()
+        with pytest.raises(ValueError, match="non-empty"):
+            equities.get_last_quote("", client=fake)
+
+
+class FakePrevClose:
+    def __init__(self, ticker="AAPL"):
+        self.ticker = ticker
+        self.open = 100.0
+        self.high = 105.0
+        self.low = 99.0
+        self.close = 103.0
+        self.volume = 1_000_000
+        self.vwap = 102.0
+        self.timestamp = 1735689600_000  # 2025-01-01 ms
+
+
+class TestGetPreviousClose:
+    def test_basket(self) -> None:
+        fake = MagicMock()
+        fake.rest.get_previous_close_agg.side_effect = lambda t, **kw: FakePrevClose(t)
+        df = equities.get_previous_close(["AAPL", "MSFT"], client=fake)
+        assert set(df["ticker"]) == {"AAPL", "MSFT"}
+        assert (df["close"] == 103.0).all()
+        # Date converted from ms timestamp
+        assert pd.api.types.is_datetime64_any_dtype(df["date"])
+
+    def test_adjusted_passes_through(self) -> None:
+        fake = MagicMock()
+        fake.rest.get_previous_close_agg.return_value = FakePrevClose("AAPL")
+        equities.get_previous_close("AAPL", adjusted=False, client=fake)
+        fake.rest.get_previous_close_agg.assert_called_once_with("AAPL", adjusted=False)
+
+
+# ── Fundamentals (mocked REST) ──────────────────────────────────────
+
+
+class FakeBalanceSheet:
+    def __init__(self, **kw):
+        self.tickers = kw.get("tickers", "AAPL")
+        self.cik = kw.get("cik", "0000320193")
+        self.period_end = kw.get("period_end", "2024-09-28")
+        self.filing_date = kw.get("filing_date", "2024-11-01")
+        self.fiscal_year = kw.get("fiscal_year", 2024)
+        self.fiscal_quarter = kw.get("fiscal_quarter", 4)
+        self.timeframe = kw.get("timeframe", "annual")
+        self.cash_and_equivalents = kw.get("cash_and_equivalents", 65_171_000_000)
+        self.total_assets = kw.get("total_assets", 364_980_000_000)
+        self.total_liabilities = kw.get("total_liabilities", 308_030_000_000)
+
+
+class TestFundamentals:
+    def test_balance_sheets_returns_dataframe(self) -> None:
+        fake = MagicMock()
+        fake.rest.list_financials_balance_sheets.return_value = [
+            FakeBalanceSheet(tickers="AAPL", period_end="2023-09-30"),
+            FakeBalanceSheet(tickers="AAPL", period_end="2024-09-28"),
+        ]
+        df = equities.fundamentals.get_balance_sheets(
+            "AAPL", timeframe="annual", client=fake,
+        )
+        fake.rest.list_financials_balance_sheets.assert_called_once_with(
+            tickers="AAPL", cik=None,
+            period_end_gte=None, period_end_lte=None,
+            timeframe="annual", limit=None,
+        )
+        assert len(df) == 2
+        assert "cash_and_equivalents" in df.columns
+        # period_end and filing_date should be datetime
+        assert pd.api.types.is_datetime64_any_dtype(df["period_end"])
+
+    def test_basket_joined_into_csv(self) -> None:
+        fake = MagicMock()
+        fake.rest.list_financials_balance_sheets.return_value = []
+        equities.fundamentals.get_balance_sheets(
+            ["AAPL", "MSFT"], client=fake,
+        )
+        # SDK expects comma-separated tickers
+        fake.rest.list_financials_balance_sheets.assert_called_once_with(
+            tickers="AAPL,MSFT", cik=None,
+            period_end_gte=None, period_end_lte=None,
+            timeframe=None, limit=None,
+        )
+
+    def test_date_filters_pass_as_period_end_gte_lte(self) -> None:
+        fake = MagicMock()
+        fake.rest.list_financials_income_statements.return_value = []
+        equities.fundamentals.get_income_statements(
+            "AAPL", start="2020-01-01", end="2024-12-31", client=fake,
+        )
+        fake.rest.list_financials_income_statements.assert_called_once_with(
+            tickers="AAPL", cik=None,
+            period_end_gte="2020-01-01", period_end_lte="2024-12-31",
+            timeframe=None, limit=None,
+        )
+
+    def test_ratios_calls_with_uppercase_ticker(self) -> None:
+        fake = MagicMock()
+        fake.rest.list_financials_ratios.return_value = []
+        equities.fundamentals.get_ratios("aapl", client=fake)
+        fake.rest.list_financials_ratios.assert_called_once_with(
+            ticker="AAPL", cik=None, limit=None,
+        )
+
+    def test_empty_returns_empty_frame(self) -> None:
+        fake = MagicMock()
+        fake.rest.list_financials_cash_flow_statements.return_value = []
+        df = equities.fundamentals.get_cash_flow_statements("ZZZZ", client=fake)
+        assert df.empty
+
+
+# ── Short data (mocked REST) ────────────────────────────────────────
+
+
+class FakeShortInterest:
+    def __init__(self, ticker="AAPL", settlement_date="2024-12-15",
+                 short_interest=120_000_000, days_to_cover=1.5,
+                 avg_daily_volume=80_000_000):
+        self.ticker = ticker
+        self.settlement_date = settlement_date
+        self.short_interest = short_interest
+        self.days_to_cover = days_to_cover
+        self.avg_daily_volume = avg_daily_volume
+
+
+class FakeShortVolume:
+    def __init__(self, ticker="AAPL", date="2024-12-15"):
+        self.ticker = ticker
+        self.date = date
+        self.short_volume = 5_000_000
+        self.total_volume = 50_000_000
+        self.short_volume_ratio = 0.10
+
+
+class FakeFloat:
+    def __init__(self, ticker="AAPL"):
+        self.ticker = ticker
+        self.effective_date = "2024-12-15"
+        self.free_float = 15_000_000_000
+        self.free_float_percent = 99.9
+
+
+class TestShortData:
+    def test_short_interest(self) -> None:
+        fake = MagicMock()
+        fake.rest.list_short_interest.return_value = [
+            FakeShortInterest(),
+            FakeShortInterest(settlement_date="2024-12-31"),
+        ]
+        df = equities.short_data.get_short_interest("AAPL", client=fake)
+        fake.rest.list_short_interest.assert_called_once_with(
+            ticker="AAPL", settlement_date_gte=None,
+            settlement_date_lte=None, limit=None,
+        )
+        assert len(df) == 2
+        assert pd.api.types.is_datetime64_any_dtype(df["settlement_date"])
+
+    def test_short_volume_date_filters(self) -> None:
+        fake = MagicMock()
+        fake.rest.list_short_volume.return_value = [FakeShortVolume()]
+        equities.short_data.get_short_volume(
+            "AAPL", start="2024-01-01", end="2024-12-31", client=fake,
+        )
+        fake.rest.list_short_volume.assert_called_once_with(
+            ticker="AAPL", date_gte="2024-01-01", date_lte="2024-12-31",
+            limit=None,
+        )
+
+    def test_floats(self) -> None:
+        fake = MagicMock()
+        fake.rest.list_stocks_floats.return_value = [FakeFloat()]
+        df = equities.short_data.get_floats("AAPL", client=fake)
+        assert df.iloc[0]["free_float_percent"] == 99.9
+
+
+# ── ETF (mocked REST) ───────────────────────────────────────────────
+
+
+class FakeConstituent:
+    def __init__(self, composite="SPY", constituent="AAPL", weight=0.07):
+        self.composite_ticker = composite
+        self.constituent_ticker = constituent
+        self.constituent_name = "Apple Inc."
+        self.weight = weight
+        self.shares_held = 100_000_000
+        self.market_value = 19_500_000_000
+        self.asset_class = "Equity"
+        self.security_type = "CS"
+        self.exchange = "XNAS"
+        self.country_of_exchange = "US"
+        self.currency_traded = "USD"
+        self.isin = "US0378331005"
+        self.sedol = "2046251"
+        self.figi = "BBG000B9XRY4"
+        self.us_code = None
+        self.effective_date = "2024-12-15"
+        self.processed_date = "2024-12-16"
+
+
+class FakeFundFlow:
+    def __init__(self, etf="SPY"):
+        self.composite_ticker = etf
+        self.effective_date = "2024-12-15"
+        self.processed_date = "2024-12-16"
+        self.fund_flow = 1_000_000_000
+        self.nav = 600.0
+        self.shares_outstanding = 1_000_000_000
+
+
+class FakeProfile:
+    def __init__(self, etf="SPY"):
+        self.composite_ticker = etf
+        self.issuer = "State Street"
+        self.aum = 600_000_000_000
+        self.effective_date = "2024-12-15"
+        self.processed_date = "2024-12-16"
+
+
+class FakeAnalytics:
+    def __init__(self, etf="SPY"):
+        self.composite_ticker = etf
+        self.risk_total_score = 5.5
+        self.reward_score = 7.0
+        self.quant_total_score = 6.5
+        self.quant_grade = "B"
+        self.effective_date = "2024-12-15"
+        self.processed_date = "2024-12-16"
+
+
+class FakeTaxonomy:
+    def __init__(self, etf="SPY"):
+        self.composite_ticker = etf
+        self.asset_class = "Equity"
+        self.category = "Large Cap"
+        self.focus = "Total Market"
+        self.effective_date = "2024-12-15"
+        self.processed_date = "2024-12-16"
+
+
+class TestEtf:
+    def test_constituents(self) -> None:
+        fake = MagicMock()
+        fake.rest.get_etf_global_constituents.return_value = [
+            FakeConstituent("SPY", "AAPL", 0.07),
+            FakeConstituent("SPY", "MSFT", 0.06),
+        ]
+        df = equities.etf.get_constituents("SPY", client=fake)
+        fake.rest.get_etf_global_constituents.assert_called_once_with(
+            composite_ticker="SPY", constituent_ticker=None,
+            effective_date=None, effective_date_gte=None,
+            effective_date_lte=None, limit=None,
+        )
+        assert set(df["constituent_ticker"]) == {"AAPL", "MSFT"}
+
+    def test_constituents_normalizes_ticker_case(self) -> None:
+        fake = MagicMock()
+        fake.rest.get_etf_global_constituents.return_value = []
+        equities.etf.get_constituents("spy", client=fake)
+        fake.rest.get_etf_global_constituents.assert_called_once_with(
+            composite_ticker="SPY", constituent_ticker=None,
+            effective_date=None, effective_date_gte=None,
+            effective_date_lte=None, limit=None,
+        )
+
+    def test_fund_flows(self) -> None:
+        fake = MagicMock()
+        fake.rest.get_etf_global_fund_flows.return_value = [FakeFundFlow()]
+        df = equities.etf.get_fund_flows("SPY", client=fake)
+        assert df.iloc[0]["fund_flow"] == 1_000_000_000
+
+    def test_profiles(self) -> None:
+        fake = MagicMock()
+        fake.rest.get_etf_global_profiles.return_value = [FakeProfile()]
+        df = equities.etf.get_profiles("SPY", client=fake)
+        assert df.iloc[0]["issuer"] == "State Street"
+
+    def test_analytics(self) -> None:
+        fake = MagicMock()
+        fake.rest.get_etf_global_analytics.return_value = [FakeAnalytics()]
+        df = equities.etf.get_analytics("SPY", client=fake)
+        assert df.iloc[0]["quant_grade"] == "B"
+
+    def test_taxonomies(self) -> None:
+        fake = MagicMock()
+        fake.rest.get_etf_global_taxonomies.return_value = [FakeTaxonomy()]
+        df = equities.etf.get_taxonomies("SPY", client=fake)
+        assert df.iloc[0]["asset_class"] == "Equity"

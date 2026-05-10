@@ -46,7 +46,7 @@ Common workflows:
   - `python -m agora.download all --no-resume`
 
 ### Build, lint, and test status
-- Run the smoke suite: `pytest` (~200 tests, runs in ~7s)
+- Run the smoke suite: `pytest` (~260 tests, runs in ~7s)
 - Run a single test: `pytest tests/test_imports.py::test_module_imports`
 - CI: `.github/workflows/test.yml` runs the same `pytest` invocation on
   every push and PR to `dev` or `main`.
@@ -58,6 +58,35 @@ Common workflows:
   force-push, no deletion.
 
 ## High-level architecture
+
+### 0) Equity domain helpers (`agora/equities`) — API-first
+
+The recommended user-facing layer. Every helper hits the Massive REST
+API; there is **no** local-parquet code path inside `agora.equities`.
+Downstream packages own caching/storage; for read-only Parquet access
+they import `agora.loaders.parquet.FlatFileLoader` directly.
+
+Module map:
+- `equities/market.py` — historical OHLCV, returns, volume, grouped
+  daily, snapshots, last trade/quote, previous close, market status,
+  market holidays.
+- `equities/reference.py` — ticker universe, ticker details, ticker
+  types, exchanges catalog, related tickers.
+- `equities/cax/` — dividends, splits.
+- `equities/fundamentals.py` — balance sheets, cash flow, income,
+  ratios.
+- `equities/short_data.py` — short interest, short volume, floats.
+- `equities/etf.py` — ETF Global feed: constituents, flows, profiles,
+  analytics, taxonomies.
+- `equities/company/classification.py` — industry, sector (SIC-derived).
+- `equities/company/{news,earnings}.py` — Benzinga stubs (entitlement
+  required).
+
+The `_apply_split_adjustment` helper in `equities/market.py` is exported
+as a callable utility for client-side adjustment (when
+`adjusted=False`); it's not in the default code path because Polygon's
+`adjusted=true` query parameter handles it server-side.
+
 ### 1) Download pipeline (`agora/download`)
 This is the main ingestion path and current operational center of the repo.
 - `cli.py`: argparse command surface (`stocks`, `forex`, `reference`, `events`, `security-master`, `all`)

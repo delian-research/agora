@@ -29,6 +29,10 @@ access, security master with FIGI-linked ticker history.
 
 ## Features
 
+- **`agora.equities` — API-first domain helpers** for prices, returns,
+  volume, snapshots, dividends, splits, financial statements, short
+  data, ETF holdings/flows, and reference catalogs. Thin wrapper over
+  the Massive REST API; downstream packages own caching/storage.
 - **Bulk historical download** — ~5 years of US stock daily OHLCV (~13M rows)
   via S3 flat files in ~3 minutes; ~2 years of forex (XXX→USD) via REST in
   ~23 minutes; tickers, exchanges, splits, dividends, and a security master.
@@ -89,7 +93,7 @@ git push -u origin feat/my-thing
 gh pr create --fill        # base defaults to dev
 ```
 
-CI (the pytest suite, ~200 tests) runs on every PR and on every push to
+CI (the pytest suite, ~260 tests) runs on every PR and on every push to
 `dev` or `main`. Branch protection on `dev` requires the `test` check
 to pass before the merge button enables. Direct pushes to either
 protected branch are blocked.
@@ -163,6 +167,64 @@ loader = FlatFileLoader()
 loader.get_security_master(active_only=True, ticker_type="ETF")
 loader.audit_security("BBG000B9XRY4")            # full history for AAPL
 loader.resolve_security(ticker="META", as_of="2020-06-01")  # → resolves to FB
+```
+
+### Equity domain helpers (API-first)
+
+`agora.equities` is the recommended user-facing API. All helpers hit
+the Massive REST API directly — there is no local-cache code path
+inside this namespace. Layer your own cache on top via
+`FlatFileLoader` if you need persistence.
+
+```python
+from agora import equities
+
+# ── Market data ─────────────────────────────────────────────────────
+prices  = equities.get_daily_prices(["AAPL", "MSFT"], period="1y")
+returns = equities.get_daily_returns(["SPY"], period="2y", method="log")
+volume  = equities.get_volume(["AAPL"], period="3mo")
+snap    = equities.get_snapshot(["AAPL", "MSFT", "NVDA"])
+prev    = equities.get_previous_close(["AAPL", "MSFT"])
+trade   = equities.get_last_trade("AAPL")
+quote   = equities.get_last_quote("AAPL")
+status  = equities.get_market_status()
+hols    = equities.get_market_holidays()
+
+# Cross-section: all tickers for one date (one bulk call)
+day = equities.get_daily_grouped("2024-01-03")
+
+# ── Reference / catalogs ───────────────────────────────────────────
+universe   = equities.get_tickers(market="stocks", type="CS")
+profile    = equities.get_ticker_details(["AAPL", "MSFT"])
+exchanges  = equities.get_exchanges()
+types_     = equities.get_ticker_types()
+related    = equities.get_related_tickers("AAPL")
+
+# ── Corporate actions ───────────────────────────────────────────────
+divs   = equities.cax.get_dividends("AAPL")
+splits = equities.cax.get_splits("AAPL")
+
+# ── Fundamentals ────────────────────────────────────────────────────
+income = equities.fundamentals.get_income_statements("AAPL", timeframe="annual")
+bs     = equities.fundamentals.get_balance_sheets("AAPL", timeframe="quarterly")
+cf     = equities.fundamentals.get_cash_flow_statements("AAPL")
+ratios = equities.fundamentals.get_ratios("AAPL")
+
+# ── Short data ──────────────────────────────────────────────────────
+si     = equities.short_data.get_short_interest("AAPL")
+sv     = equities.short_data.get_short_volume("AAPL", start="2024-01-01")
+floats = equities.short_data.get_floats("AAPL")
+
+# ── ETF data ────────────────────────────────────────────────────────
+holdings = equities.etf.get_constituents("SPY")
+flows    = equities.etf.get_fund_flows("SPY", start="2024-01-01")
+profile  = equities.etf.get_profiles("SPY")
+analytics = equities.etf.get_analytics("SPY")
+taxonomy = equities.etf.get_taxonomies("SPY")
+
+# ── Classification ──────────────────────────────────────────────────
+industry = equities.get_industry(["AAPL", "JPM", "XOM"])
+sector   = equities.get_sector(["AAPL", "JPM", "XOM"])
 ```
 
 ### Read local Parquet (fast, no rate limits)
