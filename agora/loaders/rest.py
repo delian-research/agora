@@ -224,21 +224,35 @@ class MassiveDataApi:
         return self._client.get_snapshot_ticker("stocks", ticker)
 
     @retry_with_backoff()
-    def get_ticker_details(self, ticker: str) -> Any:
+    def get_ticker_details(self, ticker: str, *, date: str | None = None) -> Any:
         """
         Get detailed ticker information with retry logic.
 
         Args:
-            ticker: Stock ticker symbol
+            ticker: Stock ticker symbol.
+            date: Point-in-time profile (YYYY-MM-DD). When provided,
+                returns the ticker's profile *as of* that date — name,
+                market_cap, sic_code, etc. as recorded by Polygon then.
+                ``None`` returns the current profile.
 
         Returns:
-            Ticker details object
+            Ticker details object with attributes including ``ticker``,
+            ``name``, ``market``, ``locale``, ``primary_exchange``,
+            ``type``, ``active``, ``currency_name``, ``cik``,
+            ``composite_figi``, ``share_class_figi``, ``market_cap``,
+            ``share_class_shares_outstanding``,
+            ``weighted_shares_outstanding``, ``sic_code``,
+            ``sic_description``, ``description``, ``homepage_url``,
+            ``list_date``, ``phone_number``, ``address``, ``branding``,
+            ``total_employees``, ``round_lot``.
 
         Raises:
-            MassiveAPIError: If request fails after retries
-            MassiveDataNotFoundError: If ticker not found
+            MassiveAPIError: If request fails after retries.
+            MassiveDataNotFoundError: If ticker not found.
         """
-        logger.debug(f"Fetching ticker details for {ticker}")
+        logger.debug(f"Fetching ticker details for {ticker} (date={date})")
+        if date is not None:
+            return self._client.get_ticker_details(ticker, date=date)
         return self._client.get_ticker_details(ticker)
 
     @retry_with_backoff()
@@ -257,6 +271,70 @@ class MassiveDataApi:
         """
         logger.debug("Fetching all ticker snapshots")
         return list(self._client.get_snapshot_all("stocks"))
+
+    @retry_with_backoff()
+    def list_tickers(
+        self,
+        *,
+        market: str | None = None,
+        type: str | None = None,
+        active: bool = True,
+        search: str | None = None,
+        cik: str | None = None,
+        date: str | None = None,
+        sort: str = "ticker",
+        order: str = "asc",
+        limit: int = 1000,
+    ) -> list:
+        """
+        List ticker reference records with optional filters.
+
+        Wraps Polygon's ``/v3/reference/tickers``. The SDK auto-paginates
+        via cursor; the returned list contains every record across pages.
+
+        Args:
+            market: ``"stocks"`` / ``"fx"`` / ``"indices"`` / ``"crypto"``.
+            type: Ticker type code (``"CS"`` / ``"ETF"`` / ``"ADRC"`` / etc.).
+            active: Filter to active securities (default ``True``).
+            search: Free-text search across ticker / name.
+            cik: Filter by SEC CIK number.
+            date: Point-in-time universe (YYYY-MM-DD). Returns the
+                set of tickers active on that date.
+            sort: Sort field (``"ticker"`` / ``"name"`` / ``"market"``).
+            order: ``"asc"`` or ``"desc"``.
+            limit: Per-page limit (cursor handles total result size).
+
+        Returns:
+            List of ticker reference objects with attributes ``ticker``,
+            ``name``, ``market``, ``locale``, ``primary_exchange``,
+            ``type``, ``active``, ``currency_name``, ``cik``,
+            ``composite_figi``, ``share_class_figi``,
+            ``last_updated_utc``, ``delisted_utc``.
+
+        Raises:
+            MassiveAPIError: If request fails after retries.
+        """
+        logger.debug(
+            "Fetching tickers: market=%s type=%s active=%s",
+            market, type, active,
+        )
+        kwargs: dict = {
+            "active": active,
+            "sort": sort,
+            "order": order,
+            "limit": limit,
+        }
+        if market is not None:
+            kwargs["market"] = market
+        if type is not None:
+            kwargs["type"] = type
+        if search is not None:
+            kwargs["search"] = search
+        if cik is not None:
+            kwargs["cik"] = cik
+        if date is not None:
+            kwargs["date"] = date
+        return list(self._client.list_tickers(**kwargs))
 
     @retry_with_backoff()
     def list_dividends(

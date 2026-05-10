@@ -33,10 +33,11 @@ def test_equities_public_surface() -> None:
         "get_daily_prices", "get_daily_returns", "get_volume",
         "get_daily_grouped", "get_snapshot",
         # reference
-        "get_exchange", "get_currency", "get_country",
-        "get_market_cap", "get_shares_out",
-        # company
-        "get_industry", "get_sector", "get_major_news", "get_earnings",
+        "get_tickers", "get_ticker_details",
+        # company classification (now implemented)
+        "get_industry", "get_sector",
+        # company (still stubs — Benzinga)
+        "get_major_news", "get_earnings",
         # subpackages
         "cax", "company",
     }
@@ -527,21 +528,8 @@ class TestGetSnapshot:
 # ── Stub modules raise clearly ──────────────────────────────────────
 
 
-class TestStubsRaiseNotImplemented:
-    """When these stop raising, that's the signal to update the tests."""
-
-    def test_reference_stubs(self) -> None:
-        for fn in (
-            equities.get_exchange, equities.get_currency, equities.get_country,
-            equities.get_market_cap, equities.get_shares_out,
-        ):
-            with pytest.raises(NotImplementedError):
-                fn(["AAPL"])
-
-    def test_company_stubs(self) -> None:
-        for fn in (equities.get_industry, equities.get_sector):
-            with pytest.raises(NotImplementedError):
-                fn(["AAPL"])
+class TestBenzingaStubsStillRaise:
+    """Benzinga-entitled features remain stubs until the add-on is enabled."""
 
     def test_benzinga_stubs_raise_about_entitlement(self) -> None:
         with pytest.raises(NotImplementedError, match="Benzinga"):
@@ -725,3 +713,245 @@ class TestGetSplits:
         assert df.empty
         for col in ("ticker", "execution_date", "split_from", "split_to"):
             assert col in df.columns
+
+
+# ── Reference (mocked REST) ─────────────────────────────────────────
+
+
+class FakeTickerRecord:
+    """Stand-in for SDK list_tickers ticker objects."""
+
+    def __init__(self, ticker, name, **kwargs):
+        self.ticker = ticker
+        self.name = name
+        self.market = kwargs.get("market", "stocks")
+        self.locale = kwargs.get("locale", "us")
+        self.primary_exchange = kwargs.get("primary_exchange", "XNAS")
+        self.type = kwargs.get("type", "CS")
+        self.active = kwargs.get("active", True)
+        self.currency_name = kwargs.get("currency_name", "usd")
+        self.cik = kwargs.get("cik")
+        self.composite_figi = kwargs.get("composite_figi")
+        self.share_class_figi = kwargs.get("share_class_figi")
+        self.last_updated_utc = kwargs.get("last_updated_utc")
+        self.delisted_utc = kwargs.get("delisted_utc")
+
+
+class FakeTickerDetails:
+    """Stand-in for SDK get_ticker_details detail objects."""
+
+    def __init__(self, ticker, **kwargs):
+        # Identity
+        self.ticker = ticker
+        self.name = kwargs.get("name", f"{ticker} Inc.")
+        self.cik = kwargs.get("cik")
+        self.composite_figi = kwargs.get("composite_figi")
+        self.share_class_figi = kwargs.get("share_class_figi")
+        self.ticker_root = kwargs.get("ticker_root", ticker)
+        self.ticker_suffix = kwargs.get("ticker_suffix")
+        # Classification
+        self.market = kwargs.get("market", "stocks")
+        self.locale = kwargs.get("locale", "us")
+        self.primary_exchange = kwargs.get("primary_exchange", "XNAS")
+        self.type = kwargs.get("type", "CS")
+        self.active = kwargs.get("active", True)
+        self.currency_name = kwargs.get("currency_name", "usd")
+        self.sic_code = kwargs.get("sic_code")
+        self.sic_description = kwargs.get("sic_description")
+        # Sizing
+        self.market_cap = kwargs.get("market_cap")
+        self.share_class_shares_outstanding = kwargs.get(
+            "share_class_shares_outstanding"
+        )
+        self.weighted_shares_outstanding = kwargs.get(
+            "weighted_shares_outstanding"
+        )
+        self.round_lot = kwargs.get("round_lot", 100)
+        self.total_employees = kwargs.get("total_employees")
+        # Profile
+        self.description = kwargs.get("description")
+        self.homepage_url = kwargs.get("homepage_url")
+        self.list_date = kwargs.get("list_date")
+        self.delisted_utc = kwargs.get("delisted_utc")
+        self.phone_number = kwargs.get("phone_number")
+        self.address = kwargs.get("address")
+        self.branding = kwargs.get("branding")
+
+
+class TestGetTickers:
+    def test_basic_call(self) -> None:
+        fake = MagicMock()
+        fake.rest.list_tickers.return_value = [
+            FakeTickerRecord("AAPL", "Apple Inc.", composite_figi="BBG_AAPL"),
+            FakeTickerRecord("MSFT", "Microsoft Corp.", composite_figi="BBG_MSFT"),
+        ]
+        df = equities.get_tickers(market="stocks", type="CS", client=fake)
+        assert len(df) == 2
+        assert set(df["ticker"]) == {"AAPL", "MSFT"}
+        # Schema check
+        for col in (
+            "ticker", "name", "market", "locale", "primary_exchange",
+            "type", "active", "currency_name", "cik", "composite_figi",
+            "share_class_figi", "last_updated_utc", "delisted_utc",
+        ):
+            assert col in df.columns
+
+    def test_filters_pass_through(self) -> None:
+        fake = MagicMock()
+        fake.rest.list_tickers.return_value = []
+        equities.get_tickers(
+            market="stocks", type="ETF", active=False, search="foo",
+            cik="1234", date="2024-01-03",
+            sort="name", order="desc", limit=500,
+            client=fake,
+        )
+        fake.rest.list_tickers.assert_called_once_with(
+            market="stocks", type="ETF", active=False, search="foo",
+            cik="1234", date="2024-01-03",
+            sort="name", order="desc", limit=500,
+        )
+
+    def test_empty_records_returns_schema_frame(self) -> None:
+        fake = MagicMock()
+        fake.rest.list_tickers.return_value = []
+        df = equities.get_tickers(client=fake)
+        assert df.empty
+        # Schema columns still present
+        assert "ticker" in df.columns
+        assert "composite_figi" in df.columns
+
+
+class TestGetTickerDetails:
+    def test_single_ticker(self) -> None:
+        fake = MagicMock()
+        fake.rest.get_ticker_details.return_value = FakeTickerDetails(
+            "AAPL",
+            market_cap=3_000_000_000_000,
+            share_class_shares_outstanding=15_000_000_000,
+            sic_code="3571",
+            sic_description="Electronic Computers",
+            list_date="1980-12-12",
+        )
+        df = equities.get_ticker_details("AAPL", client=fake)
+        fake.rest.get_ticker_details.assert_called_once_with("AAPL", date=None)
+        assert len(df) == 1
+        row = df.iloc[0]
+        assert row["ticker"] == "AAPL"
+        assert row["market_cap"] == 3_000_000_000_000
+        assert row["sic_code"] == "3571"
+        assert row["sic_description"] == "Electronic Computers"
+        # list_date coerced to datetime
+        assert row["list_date"] == pd.Timestamp("1980-12-12")
+
+    def test_basket_loops_per_ticker(self) -> None:
+        fake = MagicMock()
+        fake.rest.get_ticker_details.side_effect = lambda t, **kw: (
+            FakeTickerDetails(t, market_cap=1e12)
+        )
+        df = equities.get_ticker_details(["AAPL", "MSFT", "NVDA"], client=fake)
+        assert fake.rest.get_ticker_details.call_count == 3
+        assert set(df["ticker"]) == {"AAPL", "MSFT", "NVDA"}
+
+    def test_date_parameter_passes_through(self) -> None:
+        fake = MagicMock()
+        fake.rest.get_ticker_details.return_value = FakeTickerDetails("AAPL")
+        equities.get_ticker_details("AAPL", date="2020-01-15", client=fake)
+        fake.rest.get_ticker_details.assert_called_once_with(
+            "AAPL", date="2020-01-15"
+        )
+
+    def test_ticker_normalized_to_uppercase(self) -> None:
+        fake = MagicMock()
+        fake.rest.get_ticker_details.return_value = FakeTickerDetails("AAPL")
+        equities.get_ticker_details("aapl", client=fake)
+        fake.rest.get_ticker_details.assert_called_once_with("AAPL", date=None)
+
+    def test_empty_ticker_basket_raises(self) -> None:
+        fake = MagicMock()
+        with pytest.raises(ValueError, match="must not be empty"):
+            equities.get_ticker_details([], client=fake)
+
+    def test_schema_present_when_no_results(self) -> None:
+        fake = MagicMock()
+        fake.rest.get_ticker_details.return_value = None
+        df = equities.get_ticker_details("AAPL", client=fake)
+        assert df.empty
+        # Schema preserved
+        for col in ("ticker", "market_cap", "sic_code", "sic_description"):
+            assert col in df.columns
+
+
+# ── Classification (mocked, derived from get_ticker_details) ────────
+
+
+class TestGetIndustry:
+    def test_returns_sic_description_indexed_by_ticker(self) -> None:
+        fake = MagicMock()
+        fake.rest.get_ticker_details.side_effect = lambda t, **kw: (
+            FakeTickerDetails("AAPL", sic_code="3571",
+                              sic_description="Electronic Computers")
+            if t == "AAPL" else
+            FakeTickerDetails("JPM", sic_code="6020",
+                              sic_description="National Commercial Banks")
+        )
+        s = equities.get_industry(["AAPL", "JPM"], client=fake)
+        assert s.name == "industry"
+        assert s.loc["AAPL"] == "Electronic Computers"
+        assert s.loc["JPM"] == "National Commercial Banks"
+
+    def test_empty_basket_returns_empty_series(self) -> None:
+        fake = MagicMock()
+        fake.rest.get_ticker_details.return_value = None
+        s = equities.get_industry("ZZZZ", client=fake)
+        assert s.empty
+        assert s.name == "industry"
+
+
+class TestGetSector:
+    def test_maps_sic_code_to_division(self) -> None:
+        # AAPL=3571 (Mfg), JPM=6020 (Finance), XOM=2911 (Mfg)
+        fake = MagicMock()
+        fake.rest.get_ticker_details.side_effect = lambda t, **kw: (
+            FakeTickerDetails("AAPL", sic_code="3571")
+            if t == "AAPL" else
+            FakeTickerDetails("JPM", sic_code="6020")
+            if t == "JPM" else
+            FakeTickerDetails("XOM", sic_code="2911")
+        )
+        s = equities.get_sector(["AAPL", "JPM", "XOM"], client=fake)
+        assert s.name == "sector"
+        assert s.loc["AAPL"] == "Manufacturing"
+        assert s.loc["JPM"] == "Finance, Insurance, Real Estate"
+        assert s.loc["XOM"] == "Manufacturing"
+
+    def test_unmapped_or_missing_sic_yields_none(self) -> None:
+        fake = MagicMock()
+        fake.rest.get_ticker_details.side_effect = lambda t, **kw: (
+            FakeTickerDetails("FOO", sic_code=None)
+            if t == "FOO" else
+            FakeTickerDetails("BAR", sic_code="abc")  # malformed
+        )
+        s = equities.get_sector(["FOO", "BAR"], client=fake)
+        assert s.loc["FOO"] is None
+        assert s.loc["BAR"] is None
+
+    def test_division_boundary_codes(self) -> None:
+        """Spot-check the division boundaries."""
+        from agora.equities.company.classification import _sic_to_sector
+
+        assert _sic_to_sector("0100") == "Agriculture, Forestry, Fishing"
+        assert _sic_to_sector("0999") == "Agriculture, Forestry, Fishing"
+        assert _sic_to_sector("1000") == "Mining"
+        assert _sic_to_sector("3999") == "Manufacturing"
+        assert _sic_to_sector("4000") == "Transportation, Communications, Utilities"
+        assert _sic_to_sector("5000") == "Wholesale Trade"
+        assert _sic_to_sector("5200") == "Retail Trade"
+        assert _sic_to_sector("6000") == "Finance, Insurance, Real Estate"
+        assert _sic_to_sector("7000") == "Services"
+        assert _sic_to_sector("9100") == "Public Administration"
+        assert _sic_to_sector("9900") == "Nonclassifiable"
+
+    def test_int_sic_code_handled(self) -> None:
+        from agora.equities.company.classification import _sic_to_sector
+
+        assert _sic_to_sector(3571) == "Manufacturing"
