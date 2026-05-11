@@ -2,25 +2,25 @@
 
 Five helpers, one per Polygon endpoint:
 
-    - :func:`get_tickers`         wraps ``/v3/reference/tickers`` (list)
-    - :func:`get_ticker_details`  wraps ``/v3/reference/tickers/{ticker}``
-    - :func:`get_ticker_types`    wraps ``/v3/reference/tickers/types``
-    - :func:`get_exchanges`       wraps ``/v3/reference/exchanges``
-    - :func:`get_related_tickers` wraps ``/v1/related-companies/{ticker}``
+    - :func:get_tickers         wraps /v3/reference/tickers (list)
+    - :func:get_ticker_details  wraps /v3/reference/tickers/{ticker}
+    - :func:get_ticker_types    wraps /v3/reference/tickers/types
+    - :func:get_exchanges       wraps /v3/reference/exchanges
+    - :func:get_related_tickers wraps /v1/related-companies/{ticker}
 
-Use :func:`get_tickers` to discover the universe; :func:`get_ticker_details`
+Use :func:get_tickers to discover the universe; :func:get_ticker_details
 for a rich per-ticker profile (market cap, shares outstanding, SIC code,
-description, etc.); :func:`get_ticker_types` and :func:`get_exchanges` as
-small lookup tables for joining against the ``type`` and
-``primary_exchange`` columns; :func:`get_related_tickers` for similarity
+description, etc.); :func:get_ticker_types and :func:get_exchanges as
+small lookup tables for joining against the type and
+primary_exchange columns; :func:get_related_tickers for similarity
 graph queries.
 
 The earlier scaffold exposed five field-specific stubs
-(``get_exchange``, ``get_currency``, ``get_country``, ``get_market_cap``,
-``get_shares_out``). They've been removed because they would each have
-called :func:`get_ticker_details` and discarded everything except one
+(get_exchange, get_currency, get_country, get_market_cap,
+get_shares_out). They've been removed because they would each have
+called :func:get_ticker_details and discarded everything except one
 field. Callers that need a single field should pull
-``get_ticker_details(...)[field]`` instead.
+get_ticker_details(...)[field] instead.
 """
 
 from __future__ import annotations
@@ -141,27 +141,27 @@ def get_tickers(
     Wraps Polygon's list-tickers endpoint with auto-pagination. Returns
     a DataFrame with one row per ticker and lightweight identifying
     fields. For the rich per-ticker profile (market cap, SIC, etc.)
-    use :func:`get_ticker_details`.
+    use :func:get_ticker_details.
 
     Args:
-        market: ``"stocks"`` / ``"fx"`` / ``"indices"`` / ``"crypto"``.
-            ``None`` returns all markets.
-        type: Ticker type code (``"CS"`` / ``"ETF"`` / etc.).
-        active: Filter to active securities (default ``True``). Set to
-            ``False`` to retrieve delisted-only tickers.
+        market: "stocks" / "fx" / "indices" / "crypto".
+            None returns all markets.
+        type: Ticker type code ("CS" / "ETF" / etc.).
+        active: Filter to active securities (default True). Set to
+            False to retrieve delisted-only tickers.
         search: Free-text search across ticker / name.
         cik: Filter by SEC CIK number.
         date: Point-in-time universe (YYYY-MM-DD).
-        sort: Sort field (``"ticker"`` / ``"name"`` / ``"market"``).
-        order: ``"asc"`` or ``"desc"``.
+        sort: Sort field ("ticker" / "name" / "market").
+        order: "asc" or "desc".
         limit: Per-page limit (cursor handles total result size).
         client: Override the live REST client.
 
     Returns:
-        DataFrame with columns: ``ticker``, ``name``, ``market``,
-        ``locale``, ``primary_exchange``, ``type``, ``active``,
-        ``currency_name``, ``cik``, ``composite_figi``,
-        ``share_class_figi``, ``last_updated_utc``, ``delisted_utc``.
+        DataFrame with columns: ticker, name, market,
+        locale, primary_exchange, type, active,
+        currency_name, cik, composite_figi,
+        share_class_figi, last_updated_utc, delisted_utc.
 
     Examples:
         >>> from agora import equities
@@ -216,22 +216,22 @@ def get_ticker_details(
     Returns:
         DataFrame indexed by ticker (input order) with columns:
 
-        Identity: ``ticker``, ``name``, ``cik``, ``composite_figi``,
-        ``share_class_figi``, ``ticker_root``, ``ticker_suffix``.
+        Identity: ticker, name, cik, composite_figi,
+        share_class_figi, ticker_root, ticker_suffix.
 
-        Classification: ``market``, ``locale``, ``primary_exchange``,
-        ``type``, ``active``, ``currency_name``, ``sic_code``,
-        ``sic_description``.
+        Classification: market, locale, primary_exchange,
+        type, active, currency_name, sic_code,
+        sic_description.
 
-        Sizing: ``market_cap``, ``share_class_shares_outstanding``,
-        ``weighted_shares_outstanding``, ``round_lot``, ``total_employees``.
+        Sizing: market_cap, share_class_shares_outstanding,
+        weighted_shares_outstanding, round_lot, total_employees.
 
-        Profile: ``description``, ``homepage_url``, ``list_date``,
-        ``delisted_utc``, ``phone_number``, ``address`` (nested),
-        ``branding`` (nested).
+        Profile: description, homepage_url, list_date,
+        delisted_utc, phone_number, address (nested),
+        branding (nested).
 
-        ``list_date`` and ``delisted_utc`` are returned as
-        ``datetime64`` columns. ``address`` and ``branding`` are kept
+        list_date and delisted_utc are returned as
+        datetime64 columns. address and branding are kept
         as the raw nested objects/dicts the SDK returned — pull
         sub-fields via attribute access on those rows.
 
@@ -278,19 +278,19 @@ def get_exchanges(
     """The catalog of exchanges (venues) Polygon recognizes.
 
     A small reference table — useful for joining against the
-    ``primary_exchange`` MIC column on :func:`get_tickers` /
-    :func:`get_ticker_details`.
+    primary_exchange MIC column on :func:get_tickers /
+    :func:get_ticker_details.
 
     Args:
-        asset_class: ``"stocks"`` / ``"options"`` / ``"crypto"`` / ``"fx"``.
-            ``None`` returns every asset class.
-        locale: ``"us"`` / ``"global"``. ``None`` returns every locale.
+        asset_class: "stocks" / "options" / "crypto" / "fx".
+            None returns every asset class.
+        locale: "us" / "global". None returns every locale.
         client: Override the live REST client.
 
     Returns:
-        DataFrame with columns: ``id``, ``mic``, ``operating_mic``,
-        ``name``, ``type``, ``asset_class``, ``locale``, ``acronym``,
-        ``participant_id``, ``url``.
+        DataFrame with columns: id, mic, operating_mic,
+        name, type, asset_class, locale, acronym,
+        participant_id, url.
 
     Examples:
         >>> from agora import equities
@@ -316,19 +316,19 @@ def get_ticker_types(
 ) -> pd.DataFrame:
     """The catalog of ticker type codes (CS, ETF, ADRC, etc.).
 
-    Small lookup table mapping each ``type`` code Polygon emits to a
+    Small lookup table mapping each type code Polygon emits to a
     human-readable description and its asset class. Useful for
-    documenting / joining against the ``type`` column returned by
-    :func:`get_tickers` / :func:`get_ticker_details`.
+    documenting / joining against the type column returned by
+    :func:get_tickers / :func:get_ticker_details.
 
     Args:
-        asset_class: Filter to one asset class (``"stocks"`` / ``"options"`` / ...).
-        locale: Filter to one locale (``"us"`` / ``"global"``).
+        asset_class: Filter to one asset class ("stocks" / "options" / ...).
+        locale: Filter to one locale ("us" / "global").
         client: Override the live REST client.
 
     Returns:
-        DataFrame with columns: ``code``, ``description``, ``asset_class``,
-        ``locale``.
+        DataFrame with columns: code, description, asset_class,
+        locale.
 
     Examples:
         >>> from agora import equities
@@ -355,9 +355,9 @@ def get_related_tickers(
     *,
     client: MassiveClient | None = None,
 ) -> pd.DataFrame:
-    """Tickers Polygon considers similar/related to ``ticker``.
+    """Tickers Polygon considers similar/related to ticker.
 
-    Per-ticker lookup against ``/v1/related-companies/{ticker}``. The
+    Per-ticker lookup against /v1/related-companies/{ticker}. The
     response is typically a small list (~10) of related ticker symbols
     that Polygon surfaces based on stock characteristics.
 
@@ -366,8 +366,8 @@ def get_related_tickers(
         client: Override the live REST client.
 
     Returns:
-        DataFrame with one row per related ticker (column: ``ticker``)
-        plus a ``source_ticker`` column denormalized so a basket merge
+        DataFrame with one row per related ticker (column: ticker)
+        plus a source_ticker column denormalized so a basket merge
         is trivial.
 
     Examples:

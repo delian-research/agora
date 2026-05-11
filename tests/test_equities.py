@@ -16,6 +16,7 @@ import pytest
 
 from agora import equities
 from agora.equities import market
+from agora.errors import MassiveAPIError
 
 # ── Surface tests (always run) ──────────────────────────────────────
 
@@ -32,6 +33,7 @@ def test_equities_public_surface() -> None:
         # market
         "get_daily_prices", "get_daily_returns", "get_volume",
         "get_daily_grouped", "get_previous_close", "get_snapshot",
+        "get_last_price", "get_last_volume",
         "get_last_trade", "get_last_quote",
         "get_market_status", "get_market_holidays",
         # reference
@@ -526,6 +528,371 @@ class TestGetSnapshot:
 
         df = equities.get_snapshot(client=fake_client)
         assert len(df) == 3
+
+
+class TestGetSnapshotResolvedColumns:
+    """get_snapshot() surfaces last_price / last_volume / last_change_pct
+    columns computed via the fallback chain — same semantics as
+    get_last_price / get_last_volume, just baked into the DataFrame."""
+
+    def test_resolved_columns_present(self) -> None:
+        fake = MagicMock()
+        fake.rest.get_snapshot.return_value = FakeSnapshot("AAPL")
+        df = equities.get_snapshot("AAPL", client=fake)
+        for col in ("last_price", "last_volume", "last_change_pct"):
+            assert col in df.columns, f"missing column {col}"
+
+    def test_last_price_uses_last_trade_when_present(self) -> None:
+        fake = MagicMock()
+        # _make_snapshot is defined further down in this file alongside
+        # the last-value tests; reuse it here for the configurable fakes.
+        fake.rest.get_snapshot.return_value = _make_snapshot(
+            "AAPL", last_trade_price=234.5
+        )
+        df = equities.get_snapshot("AAPL", client=fake)
+        assert df.iloc[0]["last_price"] == 234.5
+
+    def test_last_price_falls_back_to_day_close(self) -> None:
+        fake = MagicMock()
+        fake.rest.get_snapshot.return_value = _make_snapshot(
+            "AAPL", day_close=103.0, last_trade_price=None
+        )
+        df = equities.get_snapshot("AAPL", client=fake)
+        assert df.iloc[0]["last_price"] == 103.0
+
+    def test_last_price_falls_back_to_prev_close(self) -> None:
+        fake = MagicMock()
+        fake.rest.get_snapshot.return_value = _make_snapshot(
+            "AAPL",
+            day_close=None,
+            day_volume=None,
+            prev_close=99.0,
+            last_trade_price=None,
+        )
+        df = equities.get_snapshot("AAPL", client=fake)
+        assert df.iloc[0]["last_price"] == 99.0
+
+    def test_last_volume_uses_day_volume_when_present(self) -> None:
+        fake = MagicMock()
+        fake.rest.get_snapshot.return_value = _make_snapshot(
+            "AAPL", day_volume=2_500_000
+        )
+        df = equities.get_snapshot("AAPL", client=fake)
+        assert df.iloc[0]["last_volume"] == 2_500_000
+
+    def test_last_volume_falls_back_to_prev_volume(self) -> None:
+        fake = MagicMock()
+        fake.rest.get_snapshot.return_value = _make_snapshot(
+            "AAPL", day_volume=None, day_close=None, prev_volume=950_000
+        )
+        df = equities.get_snapshot("AAPL", client=fake)
+        assert df.iloc[0]["last_volume"] == 950_000
+
+    def test_last_change_pct_uses_last_price_vs_prev_close(self) -> None:
+        """last_change_pct differs from todays_change_pct: it uses the
+        resolved last_price (which can be last_trade_price), not just
+        day_close. So pre/post-market moves are reflected."""
+        fake = MagicMock()
+        fake.rest.get_snapshot.return_value = _make_snapshot(
+            "AAPL", last_trade_price=108.9, day_close=103.0, prev_close=99.0
+        )
+        df = equities.get_snapshot("AAPL", client=fake)
+        # (108.9 - 99.0) / 99.0 * 100 = 10.0
+        assert df.iloc[0]["last_change_pct"] == pytest.approx(10.0)
+
+    def test_last_change_pct_zero_when_falls_back_to_prev_close(self) -> None:
+        """When last_price falls back to prev_close (no fresh data),
+        last_change_pct is exactly 0.0 by formula — there's no fresh signal."""
+        fake = MagicMock()
+        fake.rest.get_snapshot.return_value = _make_snapshot(
+            "AAPL",
+            day_close=None,
+            day_volume=None,
+            prev_close=99.0,
+            last_trade_price=None,
+        )
+        df = equities.get_snapshot("AAPL", client=fake)
+        assert df.iloc[0]["last_price"] == 99.0
+        assert df.iloc[0]["last_change_pct"] == pytest.approx(0.0)
+
+    def test_basket_resolved_columns(self) -> None:
+        """Resolved columns work over the bulk path too."""
+        fake = MagicMock()
+        fake.rest.get_all_snapshots.return_value = [
+            _make_snapshot("AAPL", last_trade_price=234.5, prev_close=230.0),
+            _make_snapshot("MSFT", last_trade_price=None, day_close=410.0,
+                           prev_close=400.0),
+        ]
+        df = equities.get_snapshot(["AAPL", "MSFT"], client=fake)
+        df = df.set_index("ticker")
+        assert df.loc["AAPL", "last_price"] == 234.5
+        assert df.loc["MSFT", "last_price"] == 410.0
+        # (234.5 - 230.0) / 230.0 * 100
+        assert df.loc["AAPL", "last_change_pct"] == pytest.approx(
+            (234.5 - 230.0) / 230.0 * 100
+        )
+
+
+# ── Last-value helpers: get_last_price / get_last_volume ────────────
+
+
+class FakeSnapshotLastTrade:
+    def __init__(self, price: float, size: int = 100):
+        self.price = price
+        self.size = size
+
+
+def _make_snapshot(
+    ticker: str,
+    *,
+    day_close: float | None = 103.0,
+    day_volume: int | None = 1_000_000,
+    prev_close: float | None = 99.0,
+    prev_volume: int | None = 950_000,
+    last_trade_price: float | None = None,
+):
+    """Build a configurable FakeSnapshot for last-value tests."""
+    s = FakeSnapshot(ticker)
+    if day_close is None and day_volume is None:
+        s.day = None
+    else:
+        s.day.close = day_close
+        s.day.volume = day_volume
+    if prev_close is None and prev_volume is None:
+        s.prev_day = None
+    else:
+        s.prev_day.close = prev_close
+        s.prev_day.volume = prev_volume
+    if last_trade_price is not None:
+        s.last_trade = FakeSnapshotLastTrade(price=last_trade_price)
+    return s
+
+
+class TestGetLastPrice:
+    def test_single_ticker_uses_single_endpoint(self) -> None:
+        fake = MagicMock()
+        fake.rest.get_snapshot.return_value = _make_snapshot(
+            "AAPL", last_trade_price=234.5
+        )
+
+        s = equities.get_last_price("AAPL", client=fake)
+
+        fake.rest.get_snapshot.assert_called_once_with("AAPL")
+        fake.rest.get_all_snapshots.assert_not_called()
+        assert s.index.tolist() == ["AAPL"]
+        assert s["AAPL"] == 234.5
+        assert s.name == "price"
+        assert s.attrs["source"]["AAPL"] == "last_trade"
+
+    def test_basket_uses_bulk_endpoint_and_filters(self) -> None:
+        fake = MagicMock()
+        fake.rest.get_all_snapshots.return_value = [
+            _make_snapshot("AAPL", last_trade_price=234.5),
+            _make_snapshot("MSFT", last_trade_price=410.1),
+            _make_snapshot("NVDA", last_trade_price=950.0),  # not requested
+        ]
+
+        s = equities.get_last_price(["AAPL", "MSFT"], client=fake)
+
+        fake.rest.get_all_snapshots.assert_called_once()
+        fake.rest.get_snapshot.assert_not_called()
+        assert s.index.tolist() == ["AAPL", "MSFT"]
+        assert s["AAPL"] == 234.5
+        assert s["MSFT"] == 410.1
+
+    def test_input_order_preserved(self) -> None:
+        fake = MagicMock()
+        # Return in different order than requested
+        fake.rest.get_all_snapshots.return_value = [
+            _make_snapshot("MSFT", last_trade_price=410.1),
+            _make_snapshot("AAPL", last_trade_price=234.5),
+        ]
+        s = equities.get_last_price(["AAPL", "MSFT"], client=fake)
+        assert s.index.tolist() == ["AAPL", "MSFT"]
+
+    def test_fallback_to_day_close(self) -> None:
+        """No last_trade → fall back to day_close."""
+        fake = MagicMock()
+        fake.rest.get_snapshot.return_value = _make_snapshot(
+            "AAPL", day_close=103.0, last_trade_price=None
+        )
+        s = equities.get_last_price("AAPL", client=fake)
+        assert s["AAPL"] == 103.0
+        assert s.attrs["source"]["AAPL"] == "day_close"
+
+    def test_fallback_to_prev_close(self) -> None:
+        """No last_trade and no day_close → fall back to prev_close."""
+        fake = MagicMock()
+        fake.rest.get_snapshot.return_value = _make_snapshot(
+            "AAPL",
+            day_close=None,
+            day_volume=None,  # nukes the day object
+            prev_close=99.0,
+            last_trade_price=None,
+        )
+        s = equities.get_last_price("AAPL", client=fake)
+        assert s["AAPL"] == 99.0
+        assert s.attrs["source"]["AAPL"] == "prev_close"
+
+    def test_missing_ticker_nonstrict_omitted(self) -> None:
+        """Ticker not returned by bulk snapshot → omitted, listed in missing."""
+        fake = MagicMock()
+        fake.rest.get_all_snapshots.return_value = [
+            _make_snapshot("AAPL", last_trade_price=234.5),
+        ]
+        s = equities.get_last_price(["AAPL", "NOTREAL"], client=fake)
+        assert s.index.tolist() == ["AAPL"]
+        assert s.attrs["missing_tickers"] == ["NOTREAL"]
+
+    def test_missing_ticker_strict_raises(self) -> None:
+        fake = MagicMock()
+        fake.rest.get_all_snapshots.return_value = [
+            _make_snapshot("AAPL", last_trade_price=234.5),
+        ]
+        with pytest.raises(KeyError, match="NOTREAL"):
+            equities.get_last_price(["AAPL", "NOTREAL"], strict=True, client=fake)
+
+    def test_single_ticker_rest_error_strict_raises(self) -> None:
+        fake = MagicMock()
+        fake.rest.get_snapshot.side_effect = MassiveAPIError("simulated")
+        with pytest.raises(MassiveAPIError):
+            equities.get_last_price("AAPL", strict=True, client=fake)
+
+    def test_single_ticker_rest_error_nonstrict_listed_as_missing(self) -> None:
+        fake = MagicMock()
+        fake.rest.get_snapshot.side_effect = MassiveAPIError("simulated")
+        s = equities.get_last_price("AAPL", client=fake)
+        assert s.empty
+        assert s.attrs["missing_tickers"] == ["AAPL"]
+
+    def test_all_fields_null_nonstrict_omitted(self) -> None:
+        """Ticker present but every column in the chain is null → missing."""
+        fake = MagicMock()
+        fake.rest.get_snapshot.return_value = _make_snapshot(
+            "AAPL",
+            day_close=None,
+            day_volume=None,
+            prev_close=None,
+            prev_volume=None,
+            last_trade_price=None,
+        )
+        s = equities.get_last_price("AAPL", client=fake)
+        assert s.empty
+        assert s.attrs["missing_tickers"] == ["AAPL"]
+
+    def test_all_fields_null_strict_raises(self) -> None:
+        fake = MagicMock()
+        fake.rest.get_snapshot.return_value = _make_snapshot(
+            "AAPL",
+            day_close=None,
+            day_volume=None,
+            prev_close=None,
+            prev_volume=None,
+            last_trade_price=None,
+        )
+        with pytest.raises(KeyError, match="AAPL"):
+            equities.get_last_price("AAPL", strict=True, client=fake)
+
+    def test_as_of_utc_populated(self) -> None:
+        fake = MagicMock()
+        fake.rest.get_snapshot.return_value = _make_snapshot(
+            "AAPL", last_trade_price=234.5
+        )
+        s = equities.get_last_price("AAPL", client=fake)
+        # FakeSnapshot.updated = 1735689600_000_000_000 ns → 2025-01-01 UTC
+        as_of = s.attrs["as_of_utc"]["AAPL"]
+        assert isinstance(as_of, pd.Timestamp)
+        assert as_of.year == 2025
+
+    def test_empty_input_raises(self) -> None:
+        with pytest.raises(ValueError):
+            equities.get_last_price([])
+
+
+class TestGetLastVolume:
+    def test_single_ticker_uses_single_endpoint(self) -> None:
+        fake = MagicMock()
+        fake.rest.get_snapshot.return_value = _make_snapshot(
+            "AAPL", day_volume=2_500_000
+        )
+
+        s = equities.get_last_volume("AAPL", client=fake)
+
+        fake.rest.get_snapshot.assert_called_once_with("AAPL")
+        assert s["AAPL"] == 2_500_000
+        assert s.name == "volume"
+        assert s.attrs["source"]["AAPL"] == "day_volume"
+
+    def test_basket_uses_bulk_endpoint(self) -> None:
+        fake = MagicMock()
+        fake.rest.get_all_snapshots.return_value = [
+            _make_snapshot("AAPL", day_volume=2_500_000),
+            _make_snapshot("MSFT", day_volume=1_800_000),
+        ]
+        s = equities.get_last_volume(["AAPL", "MSFT"], client=fake)
+        fake.rest.get_all_snapshots.assert_called_once()
+        fake.rest.get_snapshot.assert_not_called()
+        assert s["AAPL"] == 2_500_000
+        assert s["MSFT"] == 1_800_000
+
+    def test_fallback_to_prev_volume(self) -> None:
+        """No day_volume → fall back to prev_volume."""
+        fake = MagicMock()
+        fake.rest.get_snapshot.return_value = _make_snapshot(
+            "AAPL", day_volume=None, day_close=None, prev_volume=950_000
+        )
+        s = equities.get_last_volume("AAPL", client=fake)
+        assert s["AAPL"] == 950_000
+        assert s.attrs["source"]["AAPL"] == "prev_volume"
+
+    def test_last_trade_size_not_used(self) -> None:
+        """Explicitly verify last_trade.size is NOT in the fallback chain
+        (mixing units with day_volume would be wrong)."""
+        fake = MagicMock()
+        snap = _make_snapshot(
+            "AAPL",
+            day_volume=None,
+            day_close=None,
+            prev_volume=950_000,
+            last_trade_price=234.5,  # has a last_trade with size=100
+        )
+        fake.rest.get_snapshot.return_value = snap
+        s = equities.get_last_volume("AAPL", client=fake)
+        # Should fall back to prev_volume (950_000), NOT use last_trade.size (100)
+        assert s["AAPL"] == 950_000
+        assert s.attrs["source"]["AAPL"] == "prev_volume"
+
+    def test_missing_ticker_nonstrict_omitted(self) -> None:
+        fake = MagicMock()
+        fake.rest.get_all_snapshots.return_value = [
+            _make_snapshot("AAPL", day_volume=2_500_000),
+        ]
+        s = equities.get_last_volume(["AAPL", "NOTREAL"], client=fake)
+        assert s.index.tolist() == ["AAPL"]
+        assert s.attrs["missing_tickers"] == ["NOTREAL"]
+
+    def test_missing_ticker_strict_raises(self) -> None:
+        fake = MagicMock()
+        fake.rest.get_all_snapshots.return_value = [
+            _make_snapshot("AAPL", day_volume=2_500_000),
+        ]
+        with pytest.raises(KeyError, match="NOTREAL"):
+            equities.get_last_volume(
+                ["AAPL", "NOTREAL"], strict=True, client=fake
+            )
+
+    def test_input_order_preserved(self) -> None:
+        fake = MagicMock()
+        fake.rest.get_all_snapshots.return_value = [
+            _make_snapshot("MSFT", day_volume=1_800_000),
+            _make_snapshot("AAPL", day_volume=2_500_000),
+        ]
+        s = equities.get_last_volume(["AAPL", "MSFT"], client=fake)
+        assert s.index.tolist() == ["AAPL", "MSFT"]
+
+    def test_empty_input_raises(self) -> None:
+        with pytest.raises(ValueError):
+            equities.get_last_volume([])
 
 
 # ── Stub modules raise clearly ──────────────────────────────────────

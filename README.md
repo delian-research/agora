@@ -184,7 +184,11 @@ prices  = equities.get_daily_prices(["AAPL", "MSFT"], period="1y")
 returns = equities.get_daily_returns(["SPY"], period="2y", method="log")
 volume  = equities.get_volume(["AAPL"], period="3mo")
 snap    = equities.get_snapshot(["AAPL", "MSFT", "NVDA"])
+# snap includes resolved columns: last_price, last_volume, last_change_pct
+# (fallback chains computed locally — no extra API cost).
 prev    = equities.get_previous_close(["AAPL", "MSFT"])
+last_px  = equities.get_last_price(["AAPL", "MSFT"])    # Series; last_trade → day_close → prev_close
+last_vol = equities.get_last_volume(["AAPL", "MSFT"])   # Series; day_volume → prev_volume
 trade   = equities.get_last_trade("AAPL")
 quote   = equities.get_last_quote("AAPL")
 status  = equities.get_market_status()

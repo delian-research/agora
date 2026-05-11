@@ -1,25 +1,29 @@
 """Equity market data — historical bars, returns, volume, snapshots, grouped.
 
-Public functions (all API-only — `agora` is a thin client over the
+Public functions (all API-only — agora is a thin client over the
 Massive REST API; downstream packages handle local caching):
 
-    - :func:`get_daily_prices` — pivoted OHLCV matrix over a date range
+    - :func:get_daily_prices — pivoted OHLCV matrix over a date range
       (per-ticker time-series; one API call per ticker).
-    - :func:`get_daily_returns` — daily returns derived from prices.
-    - :func:`get_volume` — daily share volume (split-adjusted by default
-      via Polygon's ``adjusted=true`` query parameter).
-    - :func:`get_daily_grouped` — all-tickers cross-section for one date
+    - :func:get_daily_returns — daily returns derived from prices.
+    - :func:get_volume — daily share volume (split-adjusted by default
+      via Polygon's adjusted=true query parameter).
+    - :func:get_daily_grouped — all-tickers cross-section for one date
       (single bulk API call returning ~10K rows).
-    - :func:`get_snapshot` — current market snapshot.
+    - :func:get_snapshot — current market snapshot.
+    - :func:get_last_price — most recent price per ticker (Series),
+      fallback chain: last_trade → day_close → prev_close.
+    - :func:get_last_volume — most recent trading volume per ticker
+      (Series), fallback chain: day_volume → prev_volume.
 
-The :func:`_apply_split_adjustment` helper remains exported for callers
+The :func:_apply_split_adjustment helper remains exported for callers
 that want client-side split adjustment from a separate splits source —
 it is no longer in the default code path because Polygon's
-``adjusted=True`` query parameter is the source-of-truth and faster.
+adjusted=True query parameter is the source-of-truth and faster.
 
-Future: ``get_adv()`` and ``get_volatility()`` are derived stats that
+Future: get_adv() and get_volatility() are derived stats that
 will be added here when the use case shows up. Both are computed from
-``get_daily_prices`` output, not separate raw fields.
+get_daily_prices output, not separate raw fields.
 """
 
 from __future__ import annotations
@@ -70,7 +74,7 @@ def _resolve_dates(
     end: str | None,
     period: str | None,
 ) -> tuple[str, str]:
-    """Resolve ``period`` OR ``(start, end)`` into ISO date strings."""
+    """Resolve period OR (start, end) into ISO date strings."""
     if period and (start or end):
         raise ValueError("Use either period OR start/end, not both.")
 
@@ -132,7 +136,7 @@ def _apply_split_adjustment(
     volume gets multiplied up by the same factor (so dollar volume is
     preserved across the split).
 
-    Not used by the default code path (Polygon's ``adjusted=True`` does
+    Not used by the default code path (Polygon's adjusted=True does
     this server-side). Kept as a callable utility for callers that want
     to do client-side adjustment from a separately-fetched splits source.
     """
@@ -177,9 +181,9 @@ def _fetch_rest(
     """Long-format OHLCV DataFrame from live REST per ticker.
 
     Returns:
-        (DataFrame, failed) where ``failed`` is a list of
-        ``(ticker, exception)`` tuples for tickers whose API call raised.
-        When ``strict=True`` the first failure raises and the call aborts.
+        (DataFrame, failed) where failed is a list of
+        (ticker, exception) tuples for tickers whose API call raised.
+        When strict=True the first failure raises and the call aborts.
     """
     c = client or get_client()
     rows = []
@@ -248,7 +252,7 @@ def _pivot_multi(
 # ── Snapshot helpers ────────────────────────────────────────────────
 
 def _snapshots_to_dataframe(snaps: list) -> pd.DataFrame:
-    """Flatten a list of ``TickerSnapshot`` objects to a row-per-ticker DataFrame."""
+    """Flatten a list of TickerSnapshot objects to a row-per-ticker DataFrame."""
     rows = []
     for s in snaps:
         day = getattr(s, "day", None)
@@ -278,10 +282,32 @@ def _snapshots_to_dataframe(snaps: list) -> pd.DataFrame:
             "updated_ns": getattr(s, "updated", None),
         })
     df = pd.DataFrame(rows)
-    if not df.empty and "updated_ns" in df.columns:
+    if df.empty:
+        return df
+
+    if "updated_ns" in df.columns:
         df["updated_utc"] = pd.to_datetime(
             df["updated_ns"], unit="ns", utc=True, errors="coerce"
         )
+
+    # Derived resolved columns (vectorized fallback chains).
+    # Mirrors the per-row logic in get_last_price / get_last_volume so the
+    # snapshot DataFrame surfaces the "best available" value without callers
+    # needing to re-walk the chain.
+    df["last_price"] = (
+        df["last_trade_price"]
+        .combine_first(df["day_close"])
+        .combine_first(df["prev_close"])
+    )
+    df["last_volume"] = df["day_volume"].combine_first(df["prev_volume"])
+    # Percent change between resolved last_price and prev_close. Differs from
+    # todays_change_pct (API field, day_close vs prev_close) in that it
+    # uses the freshest available price — so it reflects pre/post-market moves
+    # when last_trade_price is the picked source. When last_price falls
+    # back to prev_close (no fresh data), this is exactly 0.0 by definition.
+    df["last_change_pct"] = (
+        (df["last_price"] - df["prev_close"]) / df["prev_close"] * 100
+    )
     return df
 
 
@@ -303,44 +329,44 @@ def get_daily_prices(
     """Daily OHLCV prices for a basket of equity tickers via REST.
 
     Issues one API call per ticker. For wide-universe queries on a single
-    date, prefer :func:`get_daily_grouped`. For caching across calls,
-    layer your own cache on top of this — `agora` is the thin API client.
+    date, prefer :func:get_daily_grouped. For caching across calls,
+    layer your own cache on top of this — agora is the thin API client.
 
     Args:
         tickers: One or more ticker symbols.
-        start: Start date (YYYY-MM-DD inclusive). Mutually exclusive with ``period``.
-        end:   End date (YYYY-MM-DD inclusive). Mutually exclusive with ``period``.
-        period: Convenience for relative ranges: ``"1d"``, ``"5d"``, ``"1mo"``,
-            ``"3mo"``, ``"6mo"``, ``"1y"``, ``"2y"``, ``"5y"``, ``"10y"``, ``"ytd"``.
+        start: Start date (YYYY-MM-DD inclusive). Mutually exclusive with period.
+        end:   End date (YYYY-MM-DD inclusive). Mutually exclusive with period.
+        period: Convenience for relative ranges: "1d", "5d", "1mo",
+            "3mo", "6mo", "1y", "2y", "5y", "10y", "ytd".
         fields: Which OHLCV column(s) to return. Single string returns a flat
-            matrix; sequence returns a MultiIndex ``(field, ticker)``.
+            matrix; sequence returns a MultiIndex (field, ticker).
         adjusted: Apply split adjustment server-side (Polygon's
-            ``adjusted=True`` query parameter). Default ``True``. Set to
-            ``False`` to receive raw exchange prices and run
-            :func:`_apply_split_adjustment` yourself with a
+            adjusted=True query parameter). Default True. Set to
+            False to receive raw exchange prices and run
+            :func:_apply_split_adjustment yourself with a
             separately-sourced splits frame.
         fill: Forward-fill missing values across the index.
         calendar: How to align dates across tickers.
-            ``"union"`` (default) keeps every date any ticker traded.
-            ``"intersection"`` keeps only dates where every requested
+            "union" (default) keeps every date any ticker traded.
+            "intersection" keeps only dates where every requested
             ticker has data — useful for cross-section analysis where
             unequal trading windows cause issues.
-        strict: When any per-ticker API call fails, ``strict=True``
-            re-raises the first error and aborts. ``strict=False``
+        strict: When any per-ticker API call fails, strict=True
+            re-raises the first error and aborts. strict=False
             (default) logs a warning, skips the failing ticker, and
-            exposes the list as ``df.attrs["failed_tickers"]``.
+            exposes the list as df.attrs["failed_tickers"].
         client: Override the live REST client.
 
     Returns:
         DataFrame indexed by date.
 
-        - Single-field call (``fields="close"``): columns are tickers in
+        - Single-field call (fields="close"): columns are tickers in
           input order.
-        - Multi-field call (``fields=("open","close","volume")``): columns
-          are a MultiIndex of ``(field, ticker)``.
+        - Multi-field call (fields=("open","close","volume")): columns
+          are a MultiIndex of (field, ticker).
 
         If any tickers failed in non-strict mode, the returned
-        DataFrame's ``.attrs["failed_tickers"]`` is set to the list of
+        DataFrame's .attrs["failed_tickers"] is set to the list of
         failed symbols.
 
     Examples:
@@ -400,17 +426,17 @@ def get_daily_returns(
 ) -> pd.DataFrame:
     """Daily returns for a basket of equity tickers via REST.
 
-    Wraps :func:`get_daily_prices` with ``fields="close"`` and computes
+    Wraps :func:get_daily_prices with fields="close" and computes
     period-over-period returns.
 
     Args:
-        method: ``"simple"`` for ``(p_t / p_{t-1}) - 1``, or ``"log"`` for
-            ``ln(p_t / p_{t-1})``.
-        strict: See :func:`get_daily_prices`.
+        method: "simple" for (p_t / p_{t-1}) - 1, or "log" for
+            ln(p_t / p_{t-1}).
+        strict: See :func:get_daily_prices.
 
     Returns:
         DataFrame indexed by date with one column per ticker. If any
-        REST tickers failed in non-strict mode, ``df.attrs["failed_tickers"]``
+        REST tickers failed in non-strict mode, df.attrs["failed_tickers"]
         is propagated from the underlying price fetch.
     """
     prices = get_daily_prices(
@@ -451,8 +477,8 @@ def get_volume(
 ) -> pd.DataFrame:
     """Daily share volume for a basket of equity tickers via REST.
 
-    Wraps :func:`get_daily_prices` with ``fields="volume"``. With
-    ``adjusted=True`` (default) the API returns volumes scaled to today's
+    Wraps :func:get_daily_prices with fields="volume". With
+    adjusted=True (default) the API returns volumes scaled to today's
     share basis so dollar volume is preserved across splits.
 
     Returns:
@@ -478,7 +504,7 @@ def get_daily_grouped(
     """All-tickers cross-section of daily OHLCV for a single date.
 
     A single bulk API call returning ~10K rows (every active stock that
-    traded on ``date``). Faster than :func:`get_daily_prices` when the
+    traded on date). Faster than :func:get_daily_prices when the
     ratio of tickers to days is high — see module docs for the crossover
     rule of thumb.
 
@@ -486,16 +512,16 @@ def get_daily_grouped(
         date: Trading date (YYYY-MM-DD). Returns an empty frame for
             weekends / holidays.
         adjusted: Server-side split adjustment via Polygon's
-            ``adjusted=true`` query parameter. Default ``True``.
-        include_otc: Include OTC securities. Default ``False``.
+            adjusted=true query parameter. Default True.
+        include_otc: Include OTC securities. Default False.
         tickers: Optional subset filter applied **after** the bulk pull.
-            ``None`` returns every ticker the API returned.
+            None returns every ticker the API returned.
         client: Override the live REST client.
 
     Returns:
         DataFrame with one row per ticker, columns:
-        ``ticker``, ``date``, ``open``, ``high``, ``low``, ``close``,
-        ``volume``, ``vwap``, ``transactions``.
+        ticker, date, open, high, low, close,
+        volume, vwap, transactions.
 
     Examples:
         >>> get_daily_grouped("2024-01-03")
@@ -566,13 +592,13 @@ def get_market_status(*, client: MassiveClient | None = None) -> pd.Series:
     """Current open/closed status across exchanges, currencies, and markets.
 
     Wraps Polygon's market-status endpoint. Returns a flat Series indexed
-    by attribute name (``server_time``, ``after_hours``, ``early_hours``,
-    ``market``, plus exchange/currency sub-statuses).
+    by attribute name (server_time, after_hours, early_hours,
+    market, plus exchange/currency sub-statuses).
 
     Returns:
-        Series with at least ``after_hours``, ``early_hours``, ``market``,
-        ``server_time``. Nested ``exchanges`` / ``currencies`` /
-        ``indicesGroups`` objects are kept as-is — pull sub-fields via
+        Series with at least after_hours, early_hours, market,
+        server_time. Nested exchanges / currencies /
+        indicesGroups objects are kept as-is — pull sub-fields via
         attribute access.
 
     Examples:
@@ -592,8 +618,8 @@ def get_market_holidays(*, client: MassiveClient | None = None) -> pd.DataFrame:
     """Upcoming market holidays.
 
     Wraps Polygon's market-holidays endpoint. Returns one row per
-    (exchange, holiday) with columns: ``date``, ``name``, ``exchange``,
-    ``status`` (``"closed"`` / ``"early-close"``), ``open``, ``close``.
+    (exchange, holiday) with columns: date, name, exchange,
+    status ("closed" / "early-close"), open, close.
 
     Examples:
         >>> from agora import equities
@@ -619,7 +645,7 @@ def get_last_trade(
     *,
     client: MassiveClient | None = None,
 ) -> pd.Series:
-    """Most recent trade for ``ticker``.
+    """Most recent trade for ticker.
 
     Wraps Polygon's last-trade endpoint. Returns a flat Series with the
     trade's price/size/exchange/conditions/timestamp fields.
@@ -629,11 +655,11 @@ def get_last_trade(
         client: Override the live REST client.
 
     Returns:
-        Series with at least ``ticker``, ``price``, ``size``,
-        ``exchange``, ``conditions``, ``sip_timestamp``,
-        ``participant_timestamp``, ``trf_timestamp``, ``id``,
-        ``sequence_number``, ``tape``, ``correction``,
-        ``fractional_size``. ``sip_timestamp_utc`` is added when the
+        Series with at least ticker, price, size,
+        exchange, conditions, sip_timestamp,
+        participant_timestamp, trf_timestamp, id,
+        sequence_number, tape, correction,
+        fractional_size. sip_timestamp_utc is added when the
         nanosecond timestamp is present.
 
     Examples:
@@ -660,7 +686,7 @@ def get_last_quote(
     *,
     client: MassiveClient | None = None,
 ) -> pd.Series:
-    """Most recent NBBO quote for ``ticker``.
+    """Most recent NBBO quote for ticker.
 
     Wraps Polygon's last-NBBO endpoint. Returns a flat Series with the
     quote's bid/ask price+size+exchange, conditions, and timestamps.
@@ -670,11 +696,11 @@ def get_last_quote(
         client: Override the live REST client.
 
     Returns:
-        Series with at least ``ticker``, ``bid_price``, ``bid_size``,
-        ``bid_exchange``, ``ask_price``, ``ask_size``, ``ask_exchange``,
-        ``conditions``, ``indicators``, ``sip_timestamp``,
-        ``participant_timestamp``, ``trf_timestamp``,
-        ``sequence_number``, ``tape``. ``sip_timestamp_utc`` is added
+        Series with at least ticker, bid_price, bid_size,
+        bid_exchange, ask_price, ask_size, ask_exchange,
+        conditions, indicators, sip_timestamp,
+        participant_timestamp, trf_timestamp,
+        sequence_number, tape. sip_timestamp_utc is added
         when the nanosecond timestamp is present.
 
     Examples:
@@ -704,19 +730,19 @@ def get_previous_close(
     """Previous trading day's OHLCV bar per ticker.
 
     Convenience wrapper over Polygon's per-ticker
-    ``previous_close_agg`` endpoint. For a basket, loops one call per
+    previous_close_agg endpoint. For a basket, loops one call per
     ticker. For wide-universe daily updates, prefer
-    :func:`get_daily_grouped` (single bulk call).
+    :func:get_daily_grouped (single bulk call).
 
     Args:
         tickers: One or more ticker symbols.
-        adjusted: Server-side split adjustment (default ``True``).
+        adjusted: Server-side split adjustment (default True).
         client: Override the live REST client.
 
     Returns:
-        DataFrame with one row per ticker, columns: ``ticker``,
-        ``date``, ``open``, ``high``, ``low``, ``close``, ``volume``,
-        ``vwap``.
+        DataFrame with one row per ticker, columns: ticker,
+        date, open, high, low, close, volume,
+        vwap.
 
     Examples:
         >>> from agora import equities
@@ -765,21 +791,44 @@ def get_snapshot(
     Strategy:
 
     - **One ticker**: single-ticker REST call (smallest payload).
-    - **Multiple tickers**: bulk ``get_snapshot_all`` (one API call returning
+    - **Multiple tickers**: bulk get_snapshot_all (one API call returning
       every US ticker), filtered locally — dramatically faster than N
       per-ticker calls.
     - **None**: bulk fetch, no filter (~10K rows).
 
     Args:
-        strict: When ``True``, propagate API errors. When ``False`` (default),
+        strict: When True, propagate API errors. When False (default),
             single-ticker errors return an empty DataFrame and log a warning
-            with structured ``extra`` data; the bulk path always raises
+            with structured extra data; the bulk path always raises
             (no silent failure mode is meaningful for a single bulk call).
 
     Returns:
-        DataFrame with one row per ticker, columns include ticker,
-        todays_change, day OHLCV, prev_close, last_trade_price,
-        last_quote bid/ask, min OHLCV, and updated_utc timestamp.
+        DataFrame with one row per ticker. Columns include:
+
+        - Raw payload fields: ticker, todays_change,
+          todays_change_pct, day OHLCV (day_open/day_high/
+          day_low/day_close/day_volume/day_vwap),
+          prev_close, prev_volume, last_trade_price,
+          last_trade_size, last_quote_bid/last_quote_ask,
+          min_close/min_volume, updated_utc.
+        - Derived (resolved-fallback) fields, computed locally with no
+          extra API cost:
+
+          * last_price — first non-null of last_trade_price →
+            day_close → prev_close.
+          * last_volume — first non-null of day_volume →
+            prev_volume. (last_trade.size is intentionally not
+            in this chain — different unit.)
+          * last_change_pct — (last_price - prev_close) /
+            prev_close * 100. **Differs** from todays_change_pct
+            (the API's day_close-based field): this one uses the
+            freshest resolved price, so it reflects pre/post-market
+            moves. When last_price falls back to prev_close,
+            this is exactly 0.0 (no fresh signal).
+
+        For provenance ("which field did last_price pick?"), use
+        :func:get_last_price / :func:get_last_volume which return a
+        Series with attrs["source"] populated per ticker.
     """
     c = client or get_client()
 
@@ -819,3 +868,239 @@ def get_snapshot(
             snaps = list(all_snaps)
 
     return _snapshots_to_dataframe(snaps)
+
+
+# ── Last-value helpers (price/volume) ───────────────────────────────
+
+def _fetch_snapshot_df(
+    tickers_list: list[str],
+    *,
+    strict: bool,
+    client: MassiveClient | None,
+) -> tuple[pd.DataFrame, list[str]]:
+    """Fetch snapshot rows for tickers_list and return (df, fetch_failed).
+
+    Mirrors :func:get_snapshot's single-vs-bulk routing:
+      - 1 ticker → single-ticker REST endpoint (smallest payload).
+      - >1 tickers → bulk get_all_snapshots + local filter.
+
+    fetch_failed lists tickers whose call raised in non-strict mode
+    (only meaningful for the single-ticker path; the bulk path always
+    raises on error, since there's no per-ticker recovery available).
+    """
+    c = client or get_client()
+    fetch_failed: list[str] = []
+
+    if len(tickers_list) == 1:
+        try:
+            snap = c.rest.get_snapshot(tickers_list[0])
+            snaps = [snap]
+        except MassiveAPIError as e:
+            if strict:
+                raise
+            logger.warning(
+                "snapshot for %s failed: %s",
+                tickers_list[0], e,
+                extra={
+                    "ticker": tickers_list[0],
+                    "error": type(e).__name__,
+                    "stage": "snapshot",
+                },
+            )
+            fetch_failed.append(tickers_list[0])
+            snaps = []
+    else:
+        all_snaps = c.rest.get_all_snapshots()
+        ticker_set = set(tickers_list)
+        snaps = [s for s in all_snaps if getattr(s, "ticker", None) in ticker_set]
+
+    return _snapshots_to_dataframe(snaps), fetch_failed
+
+
+def _build_last_value_series(
+    df: pd.DataFrame,
+    tickers_list: list[str],
+    fallback_columns: list[tuple[str, str]],
+    value_name: str,
+    fetch_failed: list[str],
+    *,
+    strict: bool,
+) -> pd.Series:
+    """Walk a fallback chain to pick one value per ticker from a snapshot frame.
+
+    fallback_columns is a list of (column_name, source_label)
+    pairs evaluated in order; the first non-null wins.
+
+    In strict=True, missing tickers (no row, or no non-null value
+    across the chain) raise KeyError. In strict=False they are
+    omitted from the result and exposed via
+    series.attrs["missing_tickers"] (along with any already in
+    fetch_failed).
+    """
+    by_ticker: dict[str, pd.Series] = {}
+    if not df.empty and "ticker" in df.columns:
+        by_ticker = {row["ticker"]: row for _, row in df.iterrows()}
+
+    values: list = []
+    index: list[str] = []
+    source_map: dict[str, str] = {}
+    as_of_map: dict[str, pd.Timestamp] = {}
+    missing: list[str] = list(fetch_failed)
+
+    for t in tickers_list:
+        if t in fetch_failed:
+            continue
+        row = by_ticker.get(t)
+        if row is None:
+            if strict:
+                raise KeyError(f"No snapshot data returned for ticker {t!r}")
+            missing.append(t)
+            continue
+
+        chosen_val = None
+        chosen_source: str | None = None
+        for col, label in fallback_columns:
+            v = row.get(col)
+            if v is not None and not pd.isna(v):
+                chosen_val = v
+                chosen_source = label
+                break
+
+        if chosen_val is None or chosen_source is None:
+            if strict:
+                cols = [c for c, _ in fallback_columns]
+                raise KeyError(
+                    f"No non-null value for ticker {t!r} across fields {cols}"
+                )
+            missing.append(t)
+            continue
+
+        values.append(chosen_val)
+        index.append(t)
+        source_map[t] = chosen_source
+        as_of = row.get("updated_utc")
+        as_of_map[t] = as_of if as_of is not None and not pd.isna(as_of) else pd.NaT
+
+    s = pd.Series(values, index=index, name=value_name)
+    s.attrs["source"] = source_map
+    s.attrs["as_of_utc"] = as_of_map
+    if missing:
+        s.attrs["missing_tickers"] = missing
+    return s
+
+
+def get_last_price(
+    tickers: str | Sequence[str],
+    *,
+    strict: bool = False,
+    client: MassiveClient | None = None,
+) -> pd.Series:
+    """Most recent available price per ticker.
+
+    Picks the freshest field from a snapshot call, walking the fallback
+    chain last_trade_price → day_close → prev_close. The
+    first non-null value wins.
+
+    For a single ticker, hits the single-ticker snapshot endpoint
+    (smallest payload). For multiple, uses the bulk endpoint (one API
+    call covers ~10K US tickers) and filters locally.
+
+    Args:
+        tickers: One or more ticker symbols.
+        strict: If True, raise on any per-ticker resolution failure
+            (REST error or no non-null value across the chain). If
+            False (default), unresolved tickers are omitted from the
+            result and exposed in series.attrs["missing_tickers"].
+        client: Override the live REST client.
+
+    Returns:
+        Series with name="price", index = tickers (in input order
+        for those that resolved), values = float prices.
+
+        series.attrs["source"] maps ticker → which field was used
+        ("last_trade" / "day_close" / "prev_close").
+        series.attrs["as_of_utc"] maps ticker → snapshot
+        updated_utc timestamp.
+        series.attrs["missing_tickers"] is present only when
+        tickers could not be resolved (non-strict mode).
+
+    Examples:
+        >>> from agora import equities
+        >>> px = equities.get_last_price(["AAPL", "MSFT"])
+        >>> px["AAPL"]
+        >>> px.attrs["source"]["AAPL"]   # 'last_trade' | 'day_close' | 'prev_close'
+    """
+    tickers_list = _norm_tickers(tickers)
+    df, fetch_failed = _fetch_snapshot_df(
+        tickers_list, strict=strict, client=client,
+    )
+    return _build_last_value_series(
+        df,
+        tickers_list,
+        fallback_columns=[
+            ("last_trade_price", "last_trade"),
+            ("day_close", "day_close"),
+            ("prev_close", "prev_close"),
+        ],
+        value_name="price",
+        fetch_failed=fetch_failed,
+        strict=strict,
+    )
+
+
+def get_last_volume(
+    tickers: str | Sequence[str],
+    *,
+    strict: bool = False,
+    client: MassiveClient | None = None,
+) -> pd.Series:
+    """Most recent available trading volume per ticker.
+
+    Picks the freshest cumulative-daily volume from a snapshot call,
+    walking the fallback chain day_volume → prev_volume.
+    Returns shares traded — today's running cumulative when available,
+    otherwise yesterday's full-day total.
+
+    Note: last_trade.size is intentionally not part of the chain —
+    a single trade's size is not the same unit as a daily cumulative
+    volume, and mixing them would produce misleading values.
+
+    Same single-vs-bulk routing as :func:get_last_price.
+
+    Args:
+        tickers: One or more ticker symbols.
+        strict: If True, raise on any per-ticker resolution failure.
+            If False (default), unresolved tickers are omitted from the
+            result and exposed in series.attrs["missing_tickers"].
+        client: Override the live REST client.
+
+    Returns:
+        Series with name="volume", index = tickers, values = share
+        counts (int or float depending on what the SDK returns).
+
+        series.attrs["source"] maps ticker → "day_volume" /
+        "prev_volume". series.attrs["as_of_utc"] maps ticker →
+        snapshot timestamp. series.attrs["missing_tickers"] is
+        present only when tickers could not be resolved (non-strict).
+
+    Examples:
+        >>> from agora import equities
+        >>> vol = equities.get_last_volume(["AAPL", "MSFT"])
+        >>> vol["AAPL"]
+        >>> vol.attrs["source"]["AAPL"]   # 'day_volume' | 'prev_volume'
+    """
+    tickers_list = _norm_tickers(tickers)
+    df, fetch_failed = _fetch_snapshot_df(
+        tickers_list, strict=strict, client=client,
+    )
+    return _build_last_value_series(
+        df,
+        tickers_list,
+        fallback_columns=[
+            ("day_volume", "day_volume"),
+            ("prev_volume", "prev_volume"),
+        ],
+        value_name="volume",
+        fetch_failed=fetch_failed,
+        strict=strict,
+    )

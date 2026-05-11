@@ -69,7 +69,17 @@ they import `agora.loaders.parquet.FlatFileLoader` directly.
 Module map:
 - `equities/market.py` — historical OHLCV, returns, volume, grouped
   daily, snapshots, last trade/quote, previous close, market status,
-  market holidays.
+  market holidays. Includes opinionated last-value helpers
+  (`get_last_price`, `get_last_volume`) that walk a fallback chain
+  (`last_trade_price → day_close → prev_close` for price;
+  `day_volume → prev_volume` for volume) and return a `pd.Series`
+  with provenance in `attrs["source"]`. `get_snapshot()` also
+  surfaces the same fallback values as derived columns
+  (`last_price`, `last_volume`, `last_change_pct`) so callers
+  receive resolved fields directly in the DataFrame —
+  `last_change_pct` is `(last_price - prev_close)/prev_close * 100`
+  and differs from the API's `todays_change_pct` (which is
+  `day_close`-based) because it reflects pre/post-market moves.
 - `equities/reference.py` — ticker universe, ticker details, ticker
   types, exchanges catalog, related tickers.
 - `equities/cax/` — dividends, splits.
