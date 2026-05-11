@@ -13,6 +13,10 @@ Public surface (a "verb-shape" list):
         get_daily_grouped   — all-tickers cross-section for one date
         get_previous_close  — previous trading day's bar per ticker
         get_snapshot        — current market snapshot
+        get_last_price      — most-recent price per ticker (Series)
+                              fallback: last_trade → day_close → prev_close
+        get_last_volume     — most-recent trading volume per ticker (Series)
+                              fallback: day_volume → prev_volume
         get_last_trade      — most recent trade per ticker
         get_last_quote      — most recent NBBO quote per ticker
         get_market_status   — open/closed status across exchanges
@@ -25,7 +29,7 @@ Public surface (a "verb-shape" list):
         get_exchanges       — catalog of exchanges/venues
         get_related_tickers — similar tickers per query symbol
 
-    Subpackages (call as ``equities.<sub>.<func>``)
+    Subpackages (call as equities.<sub>.<func>)
         cax           — corporate actions: get_dividends, get_splits
         fundamentals  — financial statements + ratios
         short_data    — short interest, short volume, floats
@@ -69,8 +73,10 @@ from agora.equities.market import (
     get_daily_grouped,
     get_daily_prices,
     get_daily_returns,
+    get_last_price,
     get_last_quote,
     get_last_trade,
+    get_last_volume,
     get_market_holidays,
     get_market_status,
     get_previous_close,
@@ -101,6 +107,8 @@ __all__ = [
     "get_daily_grouped",
     "get_previous_close",
     "get_snapshot",
+    "get_last_price",
+    "get_last_volume",
     "get_last_trade",
     "get_last_quote",
     "get_market_status",
