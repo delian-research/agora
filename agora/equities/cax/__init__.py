@@ -1,11 +1,12 @@
-"""Corporate actions for equities — dividends, splits, and adjustment factors.
+"""Corporate actions for equities via the Massive REST API.
 
 Public functions:
-    - :func:`get_dividends` (stub)
-    - :func:`get_splits` (stub)
+    - :func:`get_dividends` — dividend events filtered by ticker/date range
+    - :func:`get_splits` — split events filtered by ticker/date range
 
-Both will read from local Parquet (``data/reference/{dividends,splits}.parquet``)
-populated by ``agora-download reference``. Stubbed in v1; implemented next PR.
+These helpers are API-first and do not read from the local Parquet store.
+Use :class:`agora.loaders.parquet.FlatFileLoader` for offline access to
+``data/reference/{dividends,splits}.parquet``.
 """
 
 from agora.equities.cax.dividends import get_dividends

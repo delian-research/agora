@@ -1,11 +1,10 @@
 """Smoke tests for the public import surface.
 
 These would have caught the BUG-1..11 audit findings *immediately*: they
-verify that every module in the public surface is importable without
-side-effects beyond loading ``.env``. Don't replace these with deeper
-tests — they're cheap, fast, and cover a common failure mode (renamed
-modules, missing identifiers, broken cross-imports) at zero maintenance
-cost.
+verify that every public facade is importable without side-effects beyond
+loading ``.env``. Leaf implementation modules are intentionally not listed
+here; facade tests below define the compatibility contract while leaving
+internal files free to move.
 """
 
 from __future__ import annotations
@@ -29,13 +28,11 @@ PUBLIC_MODULES = [
     "agora.equities",                     # subpackage facade
     "agora.equities.market",
     "agora.equities.reference",
-    "agora.equities.cax",
-    "agora.equities.cax.dividends",
-    "agora.equities.cax.splits",
-    "agora.equities.company",
-    "agora.equities.company.classification",
-    "agora.equities.company.news",
-    "agora.equities.company.earnings",
+    "agora.equities.cax",                 # subpackage facade
+    "agora.equities.company",             # subpackage facade
+    "agora.equities.fundamentals",
+    "agora.equities.short_data",
+    "agora.equities.etf",
     "agora.normalize",
     "agora.normalize.base",
     "agora.normalize.ohlc",

@@ -1,7 +1,7 @@
 """Company-level equity attributes — classification, news, earnings.
 
 Public functions:
-    - :func:`get_industry`, :func:`get_sector`  (classification — stubs)
+    - :func:`get_industry`, :func:`get_sector`  (SIC-derived classification)
     - :func:`get_major_news`                     (Benzinga — stub; entitlement required)
     - :func:`get_earnings`                       (Benzinga — stub; entitlement required)
 
