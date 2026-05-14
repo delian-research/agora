@@ -44,7 +44,7 @@ Public surface (a "verb-shape" list):
     Company (Benzinga add-on — stubs require entitlement)
         get_major_news, get_earnings
 
-    Corporate actions (stubs in v1)
+    Corporate actions
         cax.get_dividends, cax.get_splits
 
 Examples:
@@ -54,13 +54,13 @@ Examples:
     >>> snap    = equities.get_snapshot(["AAPL", "MSFT"])
     >>>
     >>> from agora.equities import cax
-    >>> divs = cax.get_dividends("AAPL")           # NotImplementedError in v1
+    >>> divs = cax.get_dividends("AAPL")
 """
 
 # ── Subpackage exports ──────────────────────────────────────────────
 from agora.equities import cax, company, etf, fundamentals, short_data
 
-# ── Company (stubs) ─────────────────────────────────────────────────
+# ── Company ─────────────────────────────────────────────────────────
 from agora.equities.company import (
     get_earnings,
     get_industry,
