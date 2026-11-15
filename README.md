@@ -328,4 +328,4 @@ Operational guidance for AI coding agents: see `AGENTS.md`.
 
 ## License
 
-Proprietary. See `pyproject.toml` `license` field.
+MIT. See [LICENSE](LICENSE).
