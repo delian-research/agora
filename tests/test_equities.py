@@ -375,6 +375,36 @@ class TestGetDailyReturnsRest:
         assert rets.iloc[-1]["AAPL"] == pytest.approx(np.log(110.0 / 100.0))
 
 
+    def test_matches_kairos_and_rejects_non_positive_close(self) -> None:
+        import kairos
+
+        fake = MagicMock()
+        fake.rest.get_aggregates.return_value = [
+            FakeAgg(ts_ms=_ms("2024-01-02"), open=0, high=0, low=0,
+                    close=100.0, volume=0),
+            FakeAgg(ts_ms=_ms("2024-01-03"), open=0, high=0, low=0,
+                    close=0.0, volume=0),
+        ]
+        with pytest.raises(ValueError, match="strictly positive"):
+            equities.get_daily_returns(
+                "AAPL", start="2024-01-02", end="2024-01-03", client=fake,
+            )
+
+        fake.rest.get_aggregates.return_value[1] = FakeAgg(
+            ts_ms=_ms("2024-01-03"), open=0, high=0, low=0, close=95.0, volume=0,
+        )
+        prices = equities.get_daily_prices(
+            "AAPL", start="2024-01-02", end="2024-01-03", fields="close",
+            client=fake,
+        )
+        rets = equities.get_daily_returns(
+            "AAPL", start="2024-01-02", end="2024-01-03", client=fake,
+        )
+        pd.testing.assert_frame_equal(
+            rets, kairos.returns(prices, method="simple"), check_freq=False
+        )
+
+
 # ── get_volume (mocked REST) ────────────────────────────────────────
 
 

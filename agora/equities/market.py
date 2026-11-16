@@ -33,7 +33,7 @@ import logging
 from collections.abc import Sequence
 from typing import Literal
 
-import numpy as np
+import kairos
 import pandas as pd
 
 from agora.client import MassiveClient, get_client
@@ -431,13 +431,18 @@ def get_daily_returns(
 
     Args:
         method: "simple" for (p_t / p_{t-1}) - 1, or "log" for
-            ln(p_t / p_{t-1}).
+            ln(p_t / p_{t-1}). Computed by :func:`kairos.returns`; note
+            agora keeps "simple" as its default while kairos defaults to
+            "log".
         strict: See :func:get_daily_prices.
 
     Returns:
         DataFrame indexed by date with one column per ticker. If any
         REST tickers failed in non-strict mode, df.attrs["failed_tickers"]
         is propagated from the underlying price fetch.
+
+    Raises:
+        ValueError: If any fetched close is zero or negative.
     """
     prices = get_daily_prices(
         tickers, start, end,
@@ -449,12 +454,12 @@ def get_daily_returns(
     if prices.empty:
         return prices
 
-    if method == "simple":
-        returns = prices.pct_change()
-    elif method == "log":
-        returns = np.log(prices / prices.shift(1))
-    else:
+    if method not in ("simple", "log"):
         raise ValueError(f"method must be 'simple' or 'log', got {method!r}")
+    # The return math lives in kairos so every delian-research package
+    # defines returns the same way. kairos raises on non-positive prices
+    # instead of emitting inf.
+    returns = kairos.returns(prices, method=method)
 
     result = returns.dropna(how="all")
     # Propagate failed_tickers across the pct_change/log/dropna chain.

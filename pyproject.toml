@@ -5,7 +5,8 @@ description = "Market data ingestion and local Parquet store for Massive.com (fo
 readme = "README.md"
 requires-python = ">=3.13"
 authors = [{ name = "aklingler" }]
-license = { text = "Proprietary" }
+license = "MIT"
+license-files = ["LICENSE"]
 keywords = ["market-data", "polygon", "massive", "parquet", "quant", "ohlcv"]
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -19,6 +20,7 @@ classifiers = [
 dependencies = [
     "boto3>=1.42.97",
     "holidays>=0.94",
+    "kairos-analytics>=0.1.0",
     "massive>=2.4.0",
     "matplotlib>=3.10.9",
     "numpy>=2.4.4",
@@ -42,8 +44,12 @@ dev = [
 agora-download = "agora.download.cli:main"
 
 [build-system]
-requires = ["hatchling>=1.21"]
+requires = ["hatchling>=1.27"]
 build-backend = "hatchling.build"
+
+# kairos-analytics is not on PyPI yet; resolve it from GitHub until it is.
+[tool.uv.sources]
+kairos-analytics = { git = "https://github.com/delian-research/kairos", branch = "main" }
 
 [tool.hatch.build.targets.wheel]
 packages = ["agora"]
